@@ -121,10 +121,116 @@ Include:
 - Show inline error if API call fails with retry button
 - Allow proceeding without LLM if needed (manual entry fallback for paths)
 
+### Step 5: Summary & Export
+After the action plan, present a complete summary of the entire journey and offer two export options.
+
+**Summary includes:**
+- Reflection highlights (key values, energizers, drainers)
+- All generated paths with the selected ones highlighted
+- Decision matrix results with final rankings
+- Full 30/60/90 action plan
+
+**Export options:**
+- **Download PDF** — client-side PDF generation (html2pdf.js or jsPDF), styled to match the app aesthetic
+- **Send to email** — use a lightweight email service (EmailJS or Resend) to deliver the PDF summary to an email address. No backend needed — these services work client-side with an API key.
+
+Both options generate the same content — a clean, printable career plan document.
+
+## Advanced Requirements
+
+### Session Persistence with Conflict Resolution
+- Auto-save wizard progress to localStorage after each step and each answer change
+- On load, detect existing session and offer "Resume where you left off" or "Start fresh"
+- Handle multi-tab conflict: if the app is open in two tabs and both write, use a version timestamp strategy to detect stale writes
+- On conflict detection, show a merge prompt: "This session was updated in another tab. Load latest or keep current?"
+- Use `storage` event listener to detect cross-tab writes in real-time
+- Each save includes a monotonic version counter + timestamp
+
+### Animated Step Transitions
+- Wizard steps transition with enter/exit animations — not just mount/unmount
+- Use Framer Motion or CSS transitions with proper lifecycle handling
+- Outgoing step slides/fades out, incoming step slides/fades in
+- Component state must be preserved during transitions (don't remount and lose form state)
+- Back navigation reverses the animation direction
+- Loading states (waiting for LLM) have their own animation (skeleton shimmer or pulse)
+
+### Streaming LLM Responses
+- Path generation (Step 2) and action plan (Step 4) stream tokens in real-time instead of waiting for full response
+- Use Gemini's streaming API (generateContentStream)
+- Render partial markdown as tokens arrive — paths appear one by one, action items fill in progressively
+- Show a typing indicator / cursor while streaming
+- User can cancel mid-stream (AbortController)
+- If streaming fails mid-response, show what was received with a "retry" option to continue
+- Decision matrix scores (Step 3) can use non-streaming since the response is small
+
+### Undo/Redo Across the Wizard
+- Full undo/redo stack that works across all steps
+- Going back to Step 2 and changing path selections invalidates Steps 3 and 4
+- Invalidated steps show a "Your selections changed — regenerate?" prompt instead of silently using stale data
+- Undo/redo includes: answer changes, path selections, weight adjustments, score overrides
+- State dependency chain: Step 1 answers → Step 2 paths → Step 3 selections → Step 3 scores → Step 4 plan
+- Changing anything upstream marks all downstream steps as stale
+- Keyboard shortcuts: Ctrl+Z / Ctrl+Shift+Z
+
+## Testing Requirements
+
+Use Vitest + React Testing Library. Tests must pass via `npm test` (non-interactive, single run). The orchestrator uses `npm run build && npm test` as the verification gate — if either fails, changes are reverted.
+
+### Unit Tests
+
+**Wizard state management:**
+- Advancing and going back preserves form state
+- Step completion gates (can't advance past Step 1 without answering required questions)
+- Selecting/deselecting paths in Step 2 updates Step 3 availability
+
+**Decision matrix logic:**
+- Weight changes recalculate totals correctly
+- Score overrides replace LLM-suggested scores
+- Ranking updates in real-time when scores or weights change
+- Tied scores are handled (deterministic ordering)
+
+**Undo/redo:**
+- Undo reverts the last change, redo re-applies it
+- Changing a Step 1 answer marks Steps 2-4 as stale
+- Changing path selection in Step 2 marks Steps 3-4 as stale
+- Undo stack clears redo stack on new action
+
+**Session persistence:**
+- Save/load round-trips correctly (save state, reload, verify all fields restored)
+- Version counter increments on each save
+- Conflict detection triggers when version is stale
+
+### Integration Tests
+
+**Wizard flow (mocked Gemini API):**
+- Complete the full flow: fill Step 1 → generate paths → select paths → score matrix → generate action plan → view summary
+- Mock Gemini responses with realistic fixture data
+- Verify each step renders correct content based on previous step's data
+
+**Streaming (mocked):**
+- Mock a streaming response, verify partial content renders progressively
+- Cancel mid-stream, verify partial content is shown with retry option
+- Stream error mid-response, verify graceful degradation
+
+**PDF export:**
+- Generate PDF from summary data, verify it's a valid blob (non-zero size)
+- Verify summary content is present in the generated output
+
+### Build Verification
+```json
+{
+  "scripts": {
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+  }
+}
+```
+
+All three must pass. `npm run build` catches type errors. `npm test` catches logic errors. `npm run lint` catches code quality issues.
+
 ## Out of Scope (v1)
 - User accounts / authentication
-- Saving/loading sessions (could add localStorage save later)
 - Backend / database
 - Sharing results
-- PDF export
 - Multiple sessions / history comparison
