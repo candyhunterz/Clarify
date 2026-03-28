@@ -34,8 +34,7 @@ function App() {
     setMatrixScores,
     setConvictionCheck,
     setActionPlan,
-    // setPersonalNarrative and addPathExplorationMessage will be used when
-    // DiscoverStep and path exploration chat are fully implemented
+    addPathExplorationMessage,
     undo,
     redo,
     loadState,
@@ -110,6 +109,9 @@ function App() {
             onComplete={nextStep}
             onBack={prevStep}
             canComplete={canAdvance()}
+            insightProfile={state.insightProfile}
+            pathExplorations={state.pathExplorations}
+            onAddExplorationMessage={addPathExplorationMessage}
           />
         )
       case 4:

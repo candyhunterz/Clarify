@@ -422,6 +422,45 @@ Return ONLY a JSON object (no markdown, no code fences) with this exact shape:
 Be specific. Reference actual things they said. Rank coreValues from most to least important (rank 1 = most important).`
 }
 
+export function buildPathExplorationPrompt(
+  insightProfile: import('../types').InsightProfile,
+  path: CareerPath,
+  allPaths: CareerPath[],
+  history: Array<{ role: 'assistant' | 'user'; content: string }>,
+): string {
+  const historyText = history.length > 0
+    ? `\n\nConversation so far:\n${history.map((m) => `${m.role === 'assistant' ? 'Coach' : 'User'}: ${m.content}`).join('\n\n')}`
+    : ''
+
+  const otherPaths = allPaths.filter((p) => p.id !== path.id)
+    .map((p) => `- ${p.title}: ${p.description}`)
+    .join('\n')
+
+  return `You are a career coach helping someone explore the "${path.title}" career path.
+
+**About this path:**
+- Title: ${path.title}
+- Description: ${path.description}
+- Why it fits: ${path.whyItFits}
+- Salary: ${path.salaryRange.entry} → ${path.salaryRange.experienced}
+- Skills they have: ${path.skillsHave.join(', ')}
+- Skills needed: ${path.skillsNeed.join(', ')}
+- Timeline: ${path.timeline}
+- Risk: ${path.riskLevel}
+- Day in the life: ${path.dayInTheLife}
+
+**About the person:**
+${insightProfile.narrative || 'No insight profile available yet.'}
+
+**Other paths they're considering:**
+${otherPaths}
+${historyText}
+
+Answer their question directly and specifically. Be honest about downsides — don't sell the path. Keep responses to 2-4 sentences unless the question warrants more detail. If comparing to other paths, be specific about trade-offs.
+
+Return ONLY your response text — no JSON, no formatting.`
+}
+
 export interface ConversationTurnCallbacks {
   onText: (text: string) => void
   onDone: (fullText: string) => void
