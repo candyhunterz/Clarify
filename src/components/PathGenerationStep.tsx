@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import type { ReflectionAnswers, CareerPath } from '../types'
-import { getApiKey, saveApiKey, streamCareerPaths } from '../services/gemini'
+import { getApiKey, saveApiKey, hasEnvApiKey, streamCareerPaths } from '../services/gemini'
 import { ApiKeyModal } from './ApiKeyModal'
 import { PathCard } from './PathCard'
 import { SkeletonCard } from './SkeletonShimmer'
@@ -31,7 +31,7 @@ export function PathGenerationStep({
   onBack,
   canComplete,
 }: PathGenerationStepProps) {
-  const [needsKey, setNeedsKey] = useState(!getApiKey())
+  const [needsKey, setNeedsKey] = useState(!getApiKey() && !hasEnvApiKey())
   const [status, setStatus] = useState<Status>(paths.length > 0 ? 'done' : 'idle')
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
@@ -39,7 +39,7 @@ export function PathGenerationStep({
   const generate = useCallback(() => {
     const apiKey = getApiKey()
     if (!apiKey) {
-      setNeedsKey(true)
+      if (!hasEnvApiKey()) setNeedsKey(true)
       return
     }
 

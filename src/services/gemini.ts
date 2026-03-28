@@ -5,7 +5,13 @@ import { PRIORITY_LABELS, MATRIX_CRITERIA } from '../types'
 const STORAGE_KEY = 'clarify-gemini-api-key'
 
 export function getApiKey(): string | null {
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY
+  if (envKey) return envKey
   return localStorage.getItem(STORAGE_KEY)
+}
+
+export function hasEnvApiKey(): boolean {
+  return !!import.meta.env.VITE_GEMINI_API_KEY
 }
 
 export function saveApiKey(key: string): void {
@@ -118,7 +124,7 @@ export async function streamCareerPaths(
   signal: AbortSignal,
 ): Promise<void> {
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
   let accumulated = ''
   let parsedCount = 0
@@ -186,7 +192,7 @@ export async function generateMatrixScores(
   paths: CareerPath[],
 ): Promise<Record<string, Record<string, MatrixScore>>> {
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: buildMatrixPrompt(paths) }] }],
@@ -265,7 +271,7 @@ export async function streamActionPlan(
   signal: AbortSignal,
 ): Promise<void> {
   const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
   let accumulated = ''
 
