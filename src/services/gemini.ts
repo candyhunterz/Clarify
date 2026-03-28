@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { ReflectionAnswers, CareerPath, MatrixScore, ActionPlan } from '../types'
+import type { ReflectionAnswers, CareerPath, MatrixScore, ActionPlan, InsightProfile, ValuesHierarchy } from '../types'
 import { PRIORITY_LABELS, MATRIX_CRITERIA } from '../types'
 
 const STORAGE_KEY = 'clarify-gemini-api-key'
@@ -305,4 +305,217 @@ export async function streamActionPlan(
     const message = err instanceof Error ? err.message : 'Failed to generate action plan'
     callbacks.onError(message)
   }
+}
+
+// ─── Insight Conversation ────────────────────────────────────────────────────
+
+function formatReflectionForPrompt(answers: ReflectionAnswers): string {
+  const priorityLines = Object.entries(answers.priorities)
+    .map(([key, val]) => `  ${PRIORITY_LABELS[key] ?? key}: ${val}/5`)
+    .join('\n')
+
+  return `**What makes time fly at work:** ${answers.energizers.join(', ')}
+**What drains them most:** ${answers.drainers.join(', ')}
+**What they'd keep if redesigning their job:** ${answers.keepInJob || '(not specified)'}
+**Priority ratings (1-5):**
+${priorityLines}
+**See themselves writing code in 5 years:** ${answers.codingIn5Years}
+**End-of-day energy level:** ${answers.energyLevel}/5
+**Learning interests outside work:** ${answers.learningInterests.join(', ')}
+**What success looks like in 2 years:** ${answers.successVision || '(not specified)'}
+**A career decision you regret:** ${answers.regretDecision || '(not specified)'}
+**Good at but don't want to do:** ${answers.goodAtButDontWant || '(not specified)'}
+**If money were equal, would do:** ${answers.ifMoneyEqual || '(not specified)'}
+**Belief they'd most want to change:** ${answers.beliefToChange || '(not specified)'}`
+}
+
+export function buildTensionPrompt(answers: ReflectionAnswers): string {
+  return `You are a career coach conducting a deep self-reflection session. Here is a software developer's self-reflection profile:
+
+${formatReflectionForPrompt(answers)}
+
+Based on this profile, identify 2-3 core tensions — internal conflicts or contradictions in what this person wants, fears, or believes about their career.
+
+For each tension, craft a probing follow-up question that will help the person gain clarity.
+
+Return ONLY a JSON object (no markdown, no code fences) with this exact shape:
+{
+  "tensions": [
+    {
+      "description": "brief description of the tension",
+      "question": "the probing question to ask"
+    }
+  ],
+  "firstQuestion": "the single best opening question to start the conversation"
+}
+
+Focus on contradictions between what they say they want and what their answers reveal. Be empathetic but incisive.`
+}
+
+export function buildConversationFollowUpPrompt(
+  history: Array<{ role: 'assistant' | 'user'; content: string }>,
+  currentExchange: number,
+  totalExchanges: number,
+): string {
+  const historyText = history
+    .map((msg) => (msg.role === 'assistant' ? `Coach: ${msg.content}` : `User: ${msg.content}`))
+    .join('\n\n')
+
+  return `You are a career coach conducting a reflective conversation. This is exchange ${currentExchange} of ${totalExchanges}.
+
+Conversation so far:
+${historyText}
+
+Based on what the person has shared, ask a single thoughtful follow-up question that goes deeper. Do not summarize or explain — just ask the question. Keep it short (1-2 sentences). Be warm but incisive.`
+}
+
+export function buildSynthesisPrompt(
+  answers: ReflectionAnswers,
+  history: Array<{ role: 'assistant' | 'user'; content: string }>,
+): string {
+  const historyText = history
+    .map((msg) => (msg.role === 'assistant' ? `Coach: ${msg.content}` : `User: ${msg.content}`))
+    .join('\n\n')
+
+  return `You are a career coach. Based on a developer's self-reflection profile and conversation, synthesize a deep insight profile.
+
+**Reflection Profile:**
+${formatReflectionForPrompt(answers)}
+
+**Conversation:**
+${historyText}
+
+Return ONLY a JSON object (no markdown, no code fences) with this exact shape:
+{
+  "tensions": [
+    {
+      "description": "description of the tension",
+      "question": "the question that surfaced it",
+      "response": "what they said in response",
+      "resolution": "how they seem to be resolving or living with it"
+    }
+  ],
+  "coreValues": [
+    {
+      "value": "value name",
+      "rank": 1,
+      "evidence": "evidence from their answers"
+    }
+  ],
+  "hiddenBlockers": [
+    {
+      "belief": "limiting belief",
+      "source": "where this belief likely comes from"
+    }
+  ],
+  "narrative": "2-3 sentence narrative of who this person is and what they're really looking for",
+  "valuesWithConflicts": [
+    {
+      "value": "value name",
+      "aiRank": 1,
+      "evidence": "evidence from their answers",
+      "sliderConflict": "optional: how their priority sliders conflict with stated values"
+    }
+  ]
+}
+
+Be specific. Reference actual things they said. Rank coreValues from most to least important (rank 1 = most important).`
+}
+
+export interface ConversationTurnCallbacks {
+  onText: (text: string) => void
+  onDone: (fullText: string) => void
+  onError: (error: string) => void
+}
+
+export async function streamConversationTurn(
+  apiKey: string,
+  prompt: string,
+  callbacks: ConversationTurnCallbacks,
+  signal: AbortSignal,
+): Promise<void> {
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+
+  let accumulated = ''
+
+  try {
+    const result = await model.generateContentStream({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    })
+
+    for await (const chunk of result.stream) {
+      if (signal.aborted) return
+      const text = chunk.text()
+      accumulated += text
+      callbacks.onText(text)
+    }
+
+    callbacks.onDone(accumulated)
+  } catch (err: unknown) {
+    if (signal.aborted) return
+    const message = err instanceof Error ? err.message : 'Unknown error in conversation'
+    callbacks.onError(message)
+  }
+}
+
+export async function generateInsightSynthesis(
+  apiKey: string,
+  reflection: ReflectionAnswers,
+  conversationLog: Array<{ role: 'assistant' | 'user'; content: string }>,
+): Promise<{
+  profile: InsightProfile
+  valuesHierarchy: ValuesHierarchy
+}> {
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+
+  const prompt = buildSynthesisPrompt(reflection, conversationLog)
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  })
+
+  const text = result.response.text()
+  const cleaned = text.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim()
+
+  const raw = JSON.parse(cleaned) as {
+    tensions?: Array<{ description?: string; question?: string; response?: string; resolution?: string }>
+    coreValues?: Array<{ value?: string; rank?: number; evidence?: string }>
+    hiddenBlockers?: Array<{ belief?: string; source?: string }>
+    narrative?: string
+    valuesWithConflicts?: Array<{ value?: string; aiRank?: number; evidence?: string; sliderConflict?: string }>
+  }
+
+  const profile: InsightProfile = {
+    tensions: (raw.tensions ?? []).map((t) => ({
+      description: t.description ?? '',
+      question: t.question ?? '',
+      response: t.response ?? '',
+      resolution: t.resolution ?? '',
+    })),
+    coreValues: (raw.coreValues ?? []).map((v) => ({
+      value: v.value ?? '',
+      rank: v.rank ?? 0,
+      evidence: v.evidence ?? '',
+    })),
+    hiddenBlockers: (raw.hiddenBlockers ?? []).map((b) => ({
+      belief: b.belief ?? '',
+      source: b.source ?? '',
+    })),
+    narrative: raw.narrative ?? '',
+    conversationLog: conversationLog.map((msg) => ({ role: msg.role, content: msg.content })),
+  }
+
+  const valuesHierarchy: ValuesHierarchy = {
+    values: (raw.valuesWithConflicts ?? raw.coreValues ?? []).map((v, i) => ({
+      value: ('value' in v ? v.value : '') ?? '',
+      aiRank: ('aiRank' in v ? (v as { aiRank?: number }).aiRank : ('rank' in v ? (v as { rank?: number }).rank : undefined)) ?? i + 1,
+      userRank: i + 1,
+      evidence: ('evidence' in v ? v.evidence : '') ?? '',
+      sliderConflict: ('sliderConflict' in v ? (v as { sliderConflict?: string }).sliderConflict : undefined),
+    })),
+  }
+
+  return { profile, valuesHierarchy }
 }
