@@ -12,7 +12,51 @@ vi.mock('../../services/gemini', () => ({
   streamCareerPaths: vi.fn(),
   generateMatrixScores: vi.fn(),
   streamActionPlan: vi.fn(),
+  buildTensionPrompt: vi.fn(() => 'tension prompt'),
+  buildConversationFollowUpPrompt: vi.fn(() => 'follow-up prompt'),
+  streamConversationTurn: vi.fn((_key: string, _prompt: string, callbacks: { onText: (t: string) => void; onDone: (t: string) => void }) => {
+    const text = 'What matters most to you about this?'
+    callbacks.onText(text)
+    callbacks.onDone(text)
+    return Promise.resolve()
+  }),
+  generateInsightSynthesis: vi.fn(() => Promise.resolve({
+    profile: {
+      tensions: [],
+      coreValues: [{ value: 'Growth', rank: 1, evidence: 'test' }],
+      hiddenBlockers: [],
+      narrative: 'Test narrative for the user.',
+      conversationLog: [],
+    },
+    valuesHierarchy: {
+      values: [{ value: 'Growth', aiRank: 1, userRank: 1, evidence: 'test' }],
+    },
+  })),
+  streamEnhancedActionPlan: vi.fn((_key: string, _path: unknown, _profile: unknown, _check: unknown, callbacks: { onText: (t: string) => void; onPlan: (p: unknown) => void; onDone: () => void }) => {
+    callbacks.onPlan(createMockActionPlan())
+    callbacks.onDone()
+    return Promise.resolve()
+  }),
+  generatePersonalNarrative: vi.fn(() => Promise.resolve('Your story begins here.')),
 }))
+
+vi.mock('@google/generative-ai', () => {
+  class MockGoogleGenerativeAI {
+    getGenerativeModel() {
+      return {
+        generateContent: () => Promise.resolve({
+          response: {
+            text: () => JSON.stringify({
+              tensions: [{ description: 'test tension', question: 'What do you think?' }],
+              firstQuestion: 'What do you think about your career direction?',
+            }),
+          },
+        }),
+      }
+    }
+  }
+  return { GoogleGenerativeAI: MockGoogleGenerativeAI }
+})
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
@@ -96,12 +140,64 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByText('Design'))
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
-    // Q7: Success vision (OpenEnded) — last question, click "Continue"
+    // Q7: Success vision (OpenEnded) — skip
     expect(screen.getByText('What would success look like in 2 years?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q8: Regret decision (OpenEnded) — skip
+    expect(screen.getByText(/Think of a career decision you regret/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q9: Good at but don't want (OpenEnded) — skip
+    expect(screen.getByText(/What's something you're good at/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q10: If money were equal (OpenEnded) — skip
+    expect(screen.getByText(/If money were equal/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q11: Belief to change (OpenEnded) — last question, click "Continue"
+    expect(screen.getByText(/What would you need to believe/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // ────────────────────────────────────────────
-    // Step 2: Explore
+    // Step 2: Discover (AI conversation)
+    // ────────────────────────────────────────────
+
+    await waitFor(() => {
+      expect(screen.getByText("Let's dig deeper")).toBeInTheDocument()
+    })
+
+    // Start the AI conversation
+    await user.click(screen.getByRole('button', { name: 'Start conversation' }))
+
+    // Wait for AI's first question
+    await waitFor(() => {
+      expect(screen.getByText('What do you think about your career direction?')).toBeInTheDocument()
+    })
+
+    // Complete the conversation (4 exchanges to trigger synthesis)
+    for (let i = 0; i < 4; i++) {
+      const input = screen.getByPlaceholderText('Type your response...')
+      await user.type(input, 'I value growth and learning.')
+      await user.click(screen.getByRole('button', { name: 'Send' }))
+
+      if (i < 3) {
+        await waitFor(() => {
+          expect(screen.getByPlaceholderText('Type your response...')).toBeInTheDocument()
+        })
+      }
+    }
+
+    // Wait for synthesis and review
+    await waitFor(() => {
+      expect(screen.getByText('Test narrative for the user.')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    // ────────────────────────────────────────────
+    // Step 3: Explore
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -128,7 +224,7 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Compare selected' }))
 
     // ────────────────────────────────────────────
-    // Step 3: Compare (Decision Matrix)
+    // Step 4: Compare (Decision Matrix)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -147,7 +243,24 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Generate action plan' }))
 
     // ────────────────────────────────────────────
-    // Step 4: Plan (Action Plan)
+    // Step 5: Commit (conviction check)
+    // ────────────────────────────────────────────
+
+    await waitFor(() => {
+      expect(screen.getByText('Does this feel right?')).toBeInTheDocument()
+    })
+
+    // Select "Yes, that's the one" to set conviction check and unlock Continue
+    await user.click(screen.getByText("Yes, that's the one"))
+
+    // Wait for post-commit confirmation state, then click Generate plan
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Generate plan' })).not.toBeDisabled()
+    })
+    await user.click(screen.getByRole('button', { name: 'Generate plan' }))
+
+    // ────────────────────────────────────────────
+    // Step 6: Plan (Action Plan)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -167,7 +280,7 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'View summary' }))
 
     // ────────────────────────────────────────────
-    // Step 5: Summary
+    // Step 7: Summary
     // ────────────────────────────────────────────
 
     await waitFor(() => {

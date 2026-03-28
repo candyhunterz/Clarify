@@ -1,6 +1,13 @@
 import { useReducer, useCallback } from 'react'
-import type { WizardState, ReflectionAnswers, CareerPath, MatrixScore, ActionPlan } from '../types'
-import { createInitialReflection, createInitialMatrix, WIZARD_STEPS, MATRIX_CRITERIA } from '../types'
+import type {
+  WizardState, ReflectionAnswers, CareerPath, MatrixScore, ActionPlan,
+  InsightProfile, ValuesHierarchy, ConvictionCheck, ConversationMessage,
+  Scenario,
+} from '../types'
+import {
+  createInitialReflection, createInitialMatrix, createInitialInsightProfile,
+  createInitialValuesHierarchy, WIZARD_STEPS, MATRIX_CRITERIA,
+} from '../types'
 
 const MAX_UNDO_STACK = 50
 
@@ -31,6 +38,13 @@ type WizardAction =
   | { type: 'SET_PATHS'; paths: CareerPath[] }
   | { type: 'SET_MATRIX_SCORES'; scores: Record<string, Record<string, MatrixScore>> }
   | { type: 'SET_ACTION_PLAN'; plan: ActionPlan | null }
+  // Insight engine actions (non-undoable, LLM / system)
+  | { type: 'SET_INSIGHT_PROFILE'; profile: InsightProfile }
+  | { type: 'SET_VALUES_HIERARCHY'; hierarchy: ValuesHierarchy }
+  | { type: 'SET_CONVICTION_CHECK'; check: ConvictionCheck | null }
+  | { type: 'SET_PERSONAL_NARRATIVE'; narrative: string }
+  | { type: 'ADD_PATH_EXPLORATION_MESSAGE'; pathId: string; message: ConversationMessage }
+  | { type: 'SET_SCENARIOS'; scenarios: Scenario[] }
   // Navigation
   | { type: 'GO_TO_STEP'; step: number }
   | { type: 'NEXT_STEP' }
@@ -51,7 +65,7 @@ function pushEntry(past: HistoryEntry[], current: WizardState, staleSteps: numbe
 
 function addStaleDownstream(staleSteps: number[], fromStep: number): number[] {
   const set = new Set(staleSteps)
-  for (let s = fromStep + 1; s <= 4; s++) set.add(s)
+  for (let s = fromStep + 1; s <= 6; s++) set.add(s)
   return Array.from(set)
 }
 
@@ -91,7 +105,7 @@ function wizardReducer(history: WizardHistory, action: WizardAction): WizardHist
         current: { ...current, selectedPathIds: nextIds },
         past: pushEntry(past, current, staleSteps),
         future: [],
-        staleSteps: addStaleDownstream(staleSteps, 2),
+        staleSteps: addStaleDownstream(staleSteps, 3),
         direction,
       }
     }
@@ -107,7 +121,7 @@ function wizardReducer(history: WizardHistory, action: WizardAction): WizardHist
         },
         past: pushEntry(past, current, staleSteps),
         future: [],
-        staleSteps: addStaleDownstream(staleSteps, 3),
+        staleSteps: addStaleDownstream(staleSteps, 4),
         direction,
       }
 
@@ -132,7 +146,7 @@ function wizardReducer(history: WizardHistory, action: WizardAction): WizardHist
         },
         past: pushEntry(past, current, staleSteps),
         future: [],
-        staleSteps: addStaleDownstream(staleSteps, 3),
+        staleSteps: addStaleDownstream(staleSteps, 4),
         direction,
       }
     }
@@ -143,7 +157,7 @@ function wizardReducer(history: WizardHistory, action: WizardAction): WizardHist
       return {
         ...history,
         current: { ...current, paths: action.paths },
-        staleSteps: staleSteps.filter((s) => s !== 2),
+        staleSteps: staleSteps.filter((s) => s !== 3),
       }
 
     case 'SET_MATRIX_SCORES':
@@ -153,14 +167,70 @@ function wizardReducer(history: WizardHistory, action: WizardAction): WizardHist
           ...current,
           matrix: { ...current.matrix, scores: { ...current.matrix.scores, ...action.scores } },
         },
-        staleSteps: staleSteps.filter((s) => s !== 3),
+        staleSteps: staleSteps.filter((s) => s !== 4),
       }
 
     case 'SET_ACTION_PLAN':
       return {
         ...history,
         current: { ...current, actionPlan: action.plan },
-        staleSteps: staleSteps.filter((s) => s !== 4),
+        staleSteps: staleSteps.filter((s) => s !== 6),
+      }
+
+    // ── Insight engine actions ──
+
+    case 'SET_INSIGHT_PROFILE':
+      return {
+        ...history,
+        current: { ...current, insightProfile: action.profile },
+        staleSteps: addStaleDownstream(staleSteps.filter((s) => s !== 2), 2),
+      }
+
+    case 'SET_VALUES_HIERARCHY':
+      return {
+        ...history,
+        current: { ...current, valuesHierarchy: action.hierarchy },
+        staleSteps: addStaleDownstream(staleSteps.filter((s) => s !== 2), 2),
+      }
+
+    case 'SET_CONVICTION_CHECK':
+      return {
+        ...history,
+        current: { ...current, convictionCheck: action.check },
+        staleSteps: staleSteps.filter((s) => s !== 5),
+      }
+
+    case 'SET_PERSONAL_NARRATIVE':
+      return {
+        ...history,
+        current: { ...current, personalNarrative: action.narrative },
+      }
+
+    case 'ADD_PATH_EXPLORATION_MESSAGE': {
+      const existing = current.pathExplorations.find((e) => e.pathId === action.pathId)
+      let nextExplorations
+      if (existing) {
+        nextExplorations = current.pathExplorations.map((e) =>
+          e.pathId === action.pathId
+            ? { ...e, messages: [...e.messages, action.message] }
+            : e,
+        )
+      } else {
+        nextExplorations = [
+          ...current.pathExplorations,
+          { pathId: action.pathId, messages: [action.message], suggestedScoreAdjustments: [] },
+        ]
+      }
+      return {
+        ...history,
+        current: { ...current, pathExplorations: nextExplorations },
+      }
+    }
+
+    case 'SET_SCENARIOS':
+      return {
+        ...history,
+        current: { ...current, scenarios: action.scenarios },
       }
 
     // ── Navigation ──
@@ -251,10 +321,16 @@ const initialHistory: WizardHistory = {
   current: {
     currentStep: 1,
     reflection: createInitialReflection(),
+    insightProfile: createInitialInsightProfile(),
+    valuesHierarchy: createInitialValuesHierarchy(),
     paths: [],
     selectedPathIds: [],
+    pathExplorations: [],
     matrix: createInitialMatrix(),
+    scenarios: [],
+    convictionCheck: null,
     actionPlan: null,
+    personalNarrative: '',
   },
   past: [],
   future: [],
@@ -271,8 +347,10 @@ export function useWizard() {
       case 1:
         return isReflectionComplete(state.reflection)
       case 2:
+        return state.insightProfile.narrative !== ''
+      case 3:
         return state.selectedPathIds.length >= 2 && state.selectedPathIds.length <= 4
-      case 3: {
+      case 4: {
         const { scores } = state.matrix
         return state.selectedPathIds.every(
           (pid) =>
@@ -280,12 +358,14 @@ export function useWizard() {
             MATRIX_CRITERIA.every((c) => scores[pid][c.id]?.score > 0),
         )
       }
-      case 4:
+      case 5:
+        return state.convictionCheck !== null
+      case 6:
         return state.actionPlan !== null
       default:
         return false
     }
-  }, [state.currentStep, state.reflection, state.selectedPathIds, state.matrix, state.actionPlan])
+  }, [state])
 
   const nextStep = useCallback(() => {
     if (!canAdvance()) return
@@ -327,6 +407,31 @@ export function useWizard() {
     ),
     setActionPlan: useCallback(
       (plan: ActionPlan | null) => dispatch({ type: 'SET_ACTION_PLAN', plan }),
+      [],
+    ),
+    setInsightProfile: useCallback(
+      (profile: InsightProfile) => dispatch({ type: 'SET_INSIGHT_PROFILE', profile }),
+      [],
+    ),
+    setValuesHierarchy: useCallback(
+      (hierarchy: ValuesHierarchy) => dispatch({ type: 'SET_VALUES_HIERARCHY', hierarchy }),
+      [],
+    ),
+    setConvictionCheck: useCallback(
+      (check: ConvictionCheck | null) => dispatch({ type: 'SET_CONVICTION_CHECK', check }),
+      [],
+    ),
+    setPersonalNarrative: useCallback(
+      (narrative: string) => dispatch({ type: 'SET_PERSONAL_NARRATIVE', narrative }),
+      [],
+    ),
+    addPathExplorationMessage: useCallback(
+      (pathId: string, message: ConversationMessage) =>
+        dispatch({ type: 'ADD_PATH_EXPLORATION_MESSAGE', pathId, message }),
+      [],
+    ),
+    setScenarios: useCallback(
+      (scenarios: Scenario[]) => dispatch({ type: 'SET_SCENARIOS', scenarios }),
       [],
     ),
     undo: useCallback(() => dispatch({ type: 'UNDO' }), []),

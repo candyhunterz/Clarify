@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import type { CareerPath, MatrixState, ActionPlan } from '../types'
 import { MATRIX_CRITERIA } from '../types'
-import { getApiKey, streamActionPlan } from '../services/gemini'
+import { getApiKey, streamActionPlan, streamEnhancedActionPlan } from '../services/gemini'
 import { ActionPlanDisplay } from './ActionPlanDisplay'
 import { SkeletonShimmer } from './SkeletonShimmer'
 import { StaleStepBanner } from './StaleStepBanner'
@@ -16,6 +16,8 @@ interface ActionPlanStepProps {
   onComplete: () => void
   onBack: () => void
   canComplete: boolean
+  insightProfile?: import('../types').InsightProfile
+  convictionCheck?: import('../types').ConvictionCheck | null
 }
 
 type Status = 'idle' | 'streaming' | 'done' | 'error'
@@ -30,6 +32,8 @@ export function ActionPlanStep({
   onComplete,
   onBack,
   canComplete,
+  insightProfile,
+  convictionCheck,
 }: ActionPlanStepProps) {
   const [status, setStatus] = useState<Status>(actionPlan ? 'done' : 'idle')
   const [streamText, setStreamText] = useState('')
@@ -38,6 +42,9 @@ export function ActionPlanStep({
 
   // Determine the top-ranked path
   const topPath = useMemo(() => {
+    if (convictionCheck?.chosenPath) {
+      return paths.find((p) => p.id === convictionCheck.chosenPath) ?? null
+    }
     const ranked = selectedPathIds
       .map((pid) => {
         const p = paths.find((p) => p.id === pid)
@@ -54,7 +61,7 @@ export function ActionPlanStep({
       .sort((a, b) => b!.total - a!.total)
 
     return ranked[0]?.path ?? null
-  }, [paths, selectedPathIds, matrix])
+  }, [paths, selectedPathIds, matrix, convictionCheck])
 
   const generate = useCallback(() => {
     const apiKey = getApiKey()
@@ -69,27 +76,26 @@ export function ActionPlanStep({
     setStreamText('')
     onSetPlan(null)
 
-    streamActionPlan(
-      apiKey,
-      topPath,
-      {
-        onText: (text) => {
-          if (!controller.signal.aborted) setStreamText(text)
-        },
-        onPlan: (plan) => {
-          if (!controller.signal.aborted) onSetPlan(plan)
-        },
-        onError: (msg) => {
-          setError(msg)
-          setStatus('error')
-        },
-        onDone: () => {
-          if (!controller.signal.aborted) setStatus('done')
-        },
+    const callbacks = {
+      onText: (text: string) => {
+        if (!controller.signal.aborted) setStreamText(text)
       },
-      controller.signal,
-    )
-  }, [topPath, onSetPlan])
+      onPlan: (plan: ActionPlan) => {
+        if (!controller.signal.aborted) onSetPlan(plan)
+      },
+      onError: (msg: string) => {
+        setError(msg)
+        setStatus('error')
+      },
+      onDone: () => {
+        if (!controller.signal.aborted) setStatus('done')
+      },
+    }
+
+    void (insightProfile?.narrative
+      ? streamEnhancedActionPlan(apiKey, topPath, insightProfile, convictionCheck ?? null, callbacks, controller.signal)
+      : streamActionPlan(apiKey, topPath, callbacks, controller.signal))
+  }, [topPath, onSetPlan, insightProfile, convictionCheck])
 
   const cancel = () => {
     abortRef.current?.abort()

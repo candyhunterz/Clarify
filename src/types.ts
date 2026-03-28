@@ -7,6 +7,11 @@ export interface ReflectionAnswers {
   energyLevel: number
   learningInterests: string[]
   successVision: string
+  // Deep reflection questions
+  regretDecision: string
+  goodAtButDontWant: string
+  ifMoneyEqual: string
+  beliefToChange: string
 }
 
 export const PRIORITY_KEYS = [
@@ -71,10 +76,12 @@ export const CODING_5YR_OPTIONS = [
 
 export const WIZARD_STEPS = [
   { number: 1, label: 'Reflect' },
-  { number: 2, label: 'Explore' },
-  { number: 3, label: 'Compare' },
-  { number: 4, label: 'Plan' },
-  { number: 5, label: 'Summary' },
+  { number: 2, label: 'Discover' },
+  { number: 3, label: 'Explore' },
+  { number: 4, label: 'Compare' },
+  { number: 5, label: 'Commit' },
+  { number: 6, label: 'Plan' },
+  { number: 7, label: 'Summary' },
 ] as const
 
 export interface CareerPath {
@@ -132,15 +139,128 @@ export interface ActionPlan {
   resumeTips: string[]
   interviewPrep: string[]
   riskMitigation: string[]
+  // Enhanced fields
+  biggestRisk?: {
+    belief: string
+    reframe: string
+    earlyActions: string[]
+  }
+  identityMilestones?: Array<{
+    timeframe: string
+    milestone: string
+  }>
+  checkpoints?: Array<{
+    timeframe: string
+    question: string
+    greenLight: string
+    offRamp: string
+  }>
+}
+
+export interface Tension {
+  description: string
+  question: string
+  response: string
+  resolution: string
+}
+
+export interface CoreValue {
+  value: string
+  rank: number
+  evidence: string
+}
+
+export interface HiddenBlocker {
+  belief: string
+  source: string
+}
+
+export interface ConversationMessage {
+  role: 'assistant' | 'user'
+  content: string
+}
+
+export interface InsightProfile {
+  tensions: Tension[]
+  coreValues: CoreValue[]
+  hiddenBlockers: HiddenBlocker[]
+  narrative: string
+  conversationLog: ConversationMessage[]
+}
+
+export function createInitialInsightProfile(): InsightProfile {
+  return {
+    tensions: [],
+    coreValues: [],
+    hiddenBlockers: [],
+    narrative: '',
+    conversationLog: [],
+  }
+}
+
+export interface ValueEntry {
+  value: string
+  aiRank: number
+  userRank: number
+  evidence: string
+  sliderConflict?: string
+}
+
+export interface ValuesHierarchy {
+  values: ValueEntry[]
+}
+
+export function createInitialValuesHierarchy(): ValuesHierarchy {
+  return { values: [] }
+}
+
+export interface ScoreAdjustment {
+  criterionId: string
+  suggestedScore: number
+  rationale: string
+  accepted: boolean | null
+}
+
+export interface PathExploration {
+  pathId: string
+  messages: ConversationMessage[]
+  suggestedScoreAdjustments: ScoreAdjustment[]
+}
+
+export interface ConvictionCheck {
+  matrixTopPath: string
+  chosenPath: string
+  response: 'yes' | 'unsure' | 'override'
+  conversation: ConversationMessage[]
+  reasoning: string
+}
+
+export interface Scenario {
+  name: string
+  weights: Record<string, number>
+  isPreset: boolean
+}
+
+export interface SensitivityResult {
+  pathId: string
+  winsInScenarios: number
+  totalScenarios: number
+  isRobust: boolean
 }
 
 export interface WizardState {
   currentStep: number
   reflection: ReflectionAnswers
+  insightProfile: InsightProfile
+  valuesHierarchy: ValuesHierarchy
   paths: CareerPath[]
   selectedPathIds: string[]
+  pathExplorations: PathExploration[]
   matrix: MatrixState
+  scenarios: Scenario[]
+  convictionCheck: ConvictionCheck | null
   actionPlan: ActionPlan | null
+  personalNarrative: string
 }
 
 export function createInitialReflection(): ReflectionAnswers {
@@ -157,5 +277,9 @@ export function createInitialReflection(): ReflectionAnswers {
     energyLevel: 3,
     learningInterests: [],
     successVision: '',
+    regretDecision: '',
+    goodAtButDontWant: '',
+    ifMoneyEqual: '',
+    beliefToChange: '',
   }
 }

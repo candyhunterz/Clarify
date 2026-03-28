@@ -5,6 +5,8 @@ interface PathCardProps {
   isSelected: boolean
   selectionCount: number
   onToggle: () => void
+  explorationCount?: number
+  onExplore?: () => void
 }
 
 const riskColors = {
@@ -13,7 +15,7 @@ const riskColors = {
   high: 'bg-red-50 text-red-700',
 }
 
-export function PathCard({ path, isSelected, selectionCount, onToggle }: PathCardProps) {
+export function PathCard({ path, isSelected, selectionCount, onToggle, explorationCount, onExplore }: PathCardProps) {
   const canSelect = isSelected || selectionCount < 4
 
   return (
@@ -99,6 +101,23 @@ export function PathCard({ path, isSelected, selectionCount, onToggle }: PathCar
         <p className="text-xs font-medium text-slate-400">A day in the life</p>
         <p className="mt-1 text-sm leading-relaxed text-slate-600">{path.dayInTheLife}</p>
       </div>
+
+      {/* Explore button */}
+      {onExplore && (
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+          <button
+            onClick={onExplore}
+            className="text-sm font-medium text-indigo-600 transition-colors hover:text-indigo-800"
+          >
+            Explore this path
+          </button>
+          {explorationCount != null && explorationCount > 0 && (
+            <span className="text-xs text-slate-400">
+              {explorationCount} question{explorationCount !== 1 ? 's' : ''} asked
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

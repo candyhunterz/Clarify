@@ -21,7 +21,7 @@ interface ReflectionStepProps {
   canComplete: boolean
 }
 
-const TOTAL_QUESTIONS = 8
+const TOTAL_QUESTIONS = 12
 
 export function ReflectionStep({ answers, onChange, onComplete, canComplete }: ReflectionStepProps) {
   const [questionIndex, setQuestionIndex] = useState(0)
@@ -36,6 +36,10 @@ export function ReflectionStep({ answers, onChange, onComplete, canComplete }: R
       case 5: return true // slider has default
       case 6: return answers.learningInterests.length > 0
       case 7: return true // open-ended, optional
+      case 8: return true  // regretDecision, optional
+      case 9: return true  // goodAtButDontWant, optional
+      case 10: return true // ifMoneyEqual, optional
+      case 11: return true // beliefToChange, optional
       default: return false
     }
   }
@@ -137,6 +141,46 @@ export function ReflectionStep({ answers, onChange, onComplete, canComplete }: R
             placeholder="In two years, I'd feel successful if..."
             value={answers.successVision}
             onChange={(v) => onChange({ successVision: v })}
+          />
+        )
+      case 8:
+        return (
+          <OpenEnded
+            question="Think of a career decision you regret — or almost made but didn't. What held you back?"
+            subtitle="Optional — this helps us understand what drives your choices under pressure"
+            placeholder="I almost took that role at... but I didn't because..."
+            value={answers.regretDecision}
+            onChange={(v) => onChange({ regretDecision: v })}
+          />
+        )
+      case 9:
+        return (
+          <OpenEnded
+            question="What's something you're good at that you don't want to do anymore?"
+            subtitle="Optional — being good at something doesn't mean it's your path"
+            placeholder="I'm known for... but honestly I'd rather..."
+            value={answers.goodAtButDontWant}
+            onChange={(v) => onChange({ goodAtButDontWant: v })}
+          />
+        )
+      case 10:
+        return (
+          <OpenEnded
+            question="If money were equal across all options, what would change about your choice?"
+            subtitle="Optional — helps separate financial anxiety from genuine preference"
+            placeholder="If salary didn't matter, I'd probably..."
+            value={answers.ifMoneyEqual}
+            onChange={(v) => onChange({ ifMoneyEqual: v })}
+          />
+        )
+      case 11:
+        return (
+          <OpenEnded
+            question="What would you need to believe about yourself to make a big career change?"
+            subtitle="Optional — the biggest blockers are often beliefs, not skills"
+            placeholder="I'd need to believe that..."
+            value={answers.beliefToChange}
+            onChange={(v) => onChange({ beliefToChange: v })}
           />
         )
       default:

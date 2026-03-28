@@ -38,6 +38,30 @@ export function DecisionMatrixStep({
     hasAllScores(matrix.scores, selectedPathIds) ? 'done' : 'idle',
   )
   const [error, setError] = useState('')
+  const [scenarioMode, setScenarioMode] = useState(false)
+  const [activeScenario, setActiveScenario] = useState<string | null>(null)
+  const [baseWeights] = useState(() => ({ ...matrix.weights }))
+
+  const PRESET_SCENARIOS: { name: string; weights: Record<string, number> }[] = [
+    { name: "What if money didn't matter?", weights: { salary: 1 } },
+    { name: 'What if I prioritize growth?', weights: { learning: 5 } },
+    { name: 'What if I need to switch fast?', weights: { transition: 5 } },
+    { name: 'What if stability is everything?', weights: { demand: 5, creative: 1 } },
+  ]
+
+  const applyScenario = (scenario: typeof PRESET_SCENARIOS[0]) => {
+    setActiveScenario(scenario.name)
+    for (const [id, weight] of Object.entries(scenario.weights)) {
+      onUpdateWeight(id, weight)
+    }
+  }
+
+  const resetScenario = () => {
+    setActiveScenario(null)
+    for (const [id, weight] of Object.entries(baseWeights)) {
+      onUpdateWeight(id, weight)
+    }
+  }
 
   const selectedPaths = useMemo(
     () => selectedPathIds.map((id) => paths.find((p) => p.id === id)!).filter(Boolean),
@@ -221,6 +245,86 @@ export function DecisionMatrixStep({
           Re-score with AI
         </button>
       )}
+
+      {/* Scenario modeling */}
+      <div className="mt-4 space-y-3">
+        <button
+          onClick={() => {
+            const next = !scenarioMode
+            setScenarioMode(next)
+            if (!next && activeScenario) resetScenario()
+          }}
+          className={`text-sm font-medium transition-colors ${
+            scenarioMode ? 'text-indigo-600 hover:text-indigo-700' : 'text-slate-400 hover:text-indigo-600'
+          }`}
+        >
+          {scenarioMode ? 'Hide scenarios' : 'Explore scenarios'}
+        </button>
+
+        {scenarioMode && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {PRESET_SCENARIOS.map((scenario) => (
+                <button
+                  key={scenario.name}
+                  onClick={() => applyScenario(scenario)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    activeScenario === scenario.name
+                      ? 'bg-indigo-600 text-white'
+                      : 'border border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600'
+                  }`}
+                >
+                  {scenario.name}
+                </button>
+              ))}
+              {activeScenario && (
+                <button
+                  onClick={resetScenario}
+                  className="rounded-full border border-red-200 px-3 py-1 text-xs font-medium text-red-500 transition-colors hover:border-red-400 hover:text-red-700"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {rankings.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-medium text-slate-500">Sensitivity analysis</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {(() => {
+                    const wins: Record<string, number> = {}
+                    const total = PRESET_SCENARIOS.length
+                    for (const scenario of PRESET_SCENARIOS) {
+                      const tempWeights = { ...matrix.weights, ...scenario.weights }
+                      let topId = ''
+                      let topTotal = -1
+                      for (const pid of selectedPathIds) {
+                        let t = 0
+                        for (const c of MATRIX_CRITERIA) {
+                          t += (tempWeights[c.id] ?? 3) * (matrix.scores[pid]?.[c.id]?.score ?? 0)
+                        }
+                        if (t > topTotal) { topTotal = t; topId = pid }
+                      }
+                      wins[topId] = (wins[topId] ?? 0) + 1
+                    }
+                    const currentTop = rankings[0]
+                    const currentWins = wins[currentTop.pathId] ?? 0
+                    if (currentWins === total) {
+                      return `${currentTop.title} stays #1 in all ${total} scenarios — it's a robust choice.`
+                    } else if (currentWins >= total / 2) {
+                      return `${currentTop.title} stays #1 in ${currentWins}/${total} scenarios — a solid but not unshakeable pick.`
+                    } else {
+                      const topWinner = Object.entries(wins).sort(([,a], [,b]) => b - a)[0]
+                      const winnerPath = paths.find((p) => p.id === topWinner[0])
+                      return `${currentTop.title} only wins ${currentWins}/${total} scenarios. ${winnerPath?.title ?? 'Another path'} wins more often — consider what's really driving your preference.`
+                    }
+                  })()}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Ranking chart */}
       <div className="mt-8">

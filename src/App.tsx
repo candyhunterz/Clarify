@@ -2,8 +2,10 @@ import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ProgressBar } from './components/ProgressBar'
 import { ReflectionStep } from './components/ReflectionStep'
+import { DiscoverStep } from './components/DiscoverStep'
 import { PathGenerationStep } from './components/PathGenerationStep'
 import { DecisionMatrixStep } from './components/DecisionMatrixStep'
+import { CommitStep } from './components/CommitStep'
 import { ActionPlanStep } from './components/ActionPlanStep'
 import { SummaryStep } from './components/SummaryStep'
 import { SessionResumeModal } from './components/SessionResumeModal'
@@ -23,12 +25,17 @@ function App() {
     nextStep,
     prevStep,
     updateReflection,
+    setInsightProfile,
+    setValuesHierarchy,
     setPaths,
     togglePathSelection,
     updateWeight,
     updateScore,
     setMatrixScores,
+    setConvictionCheck,
     setActionPlan,
+    setPersonalNarrative,
+    addPathExplorationMessage,
     undo,
     redo,
     loadState,
@@ -42,17 +49,13 @@ function App() {
     keepCurrent,
   } = useSessionPersistence(state, loadState)
 
-  // Ctrl+Z / Ctrl+Shift+Z (Cmd on Mac) keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'z') return
-
-      // Don't hijack undo/redo inside text inputs
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
         return
       }
-
       e.preventDefault()
       if (e.shiftKey) {
         redo()
@@ -83,13 +86,13 @@ function App() {
         )
       case 2:
         return (
-          <PathGenerationStep
+          <DiscoverStep
             reflection={state.reflection}
-            paths={state.paths}
-            selectedPathIds={state.selectedPathIds}
+            insightProfile={state.insightProfile}
+            valuesHierarchy={state.valuesHierarchy}
             isStale={staleSteps.includes(2)}
-            onPathsUpdate={setPaths}
-            onTogglePath={togglePathSelection}
+            onSetInsightProfile={setInsightProfile}
+            onSetValuesHierarchy={setValuesHierarchy}
             onComplete={nextStep}
             onBack={prevStep}
             canComplete={canAdvance()}
@@ -97,11 +100,28 @@ function App() {
         )
       case 3:
         return (
+          <PathGenerationStep
+            reflection={state.reflection}
+            paths={state.paths}
+            selectedPathIds={state.selectedPathIds}
+            isStale={staleSteps.includes(3)}
+            onPathsUpdate={setPaths}
+            onTogglePath={togglePathSelection}
+            onComplete={nextStep}
+            onBack={prevStep}
+            canComplete={canAdvance()}
+            insightProfile={state.insightProfile}
+            pathExplorations={state.pathExplorations}
+            onAddExplorationMessage={addPathExplorationMessage}
+          />
+        )
+      case 4:
+        return (
           <DecisionMatrixStep
             paths={state.paths}
             selectedPathIds={state.selectedPathIds}
             matrix={state.matrix}
-            isStale={staleSteps.includes(3)}
+            isStale={staleSteps.includes(4)}
             onUpdateWeight={updateWeight}
             onUpdateScore={updateScore}
             onSetScores={setMatrixScores}
@@ -110,22 +130,43 @@ function App() {
             canComplete={canAdvance()}
           />
         )
-      case 4:
+      case 5:
+        return (
+          <CommitStep
+            paths={state.paths}
+            selectedPathIds={state.selectedPathIds}
+            matrix={state.matrix}
+            convictionCheck={state.convictionCheck}
+            onSetConvictionCheck={setConvictionCheck}
+            onComplete={nextStep}
+            onBack={prevStep}
+            canComplete={canAdvance()}
+          />
+        )
+      case 6:
         return (
           <ActionPlanStep
             paths={state.paths}
             selectedPathIds={state.selectedPathIds}
             matrix={state.matrix}
             actionPlan={state.actionPlan}
-            isStale={staleSteps.includes(4)}
+            isStale={staleSteps.includes(6)}
             onSetPlan={setActionPlan}
             onComplete={nextStep}
             onBack={prevStep}
             canComplete={canAdvance()}
+            insightProfile={state.insightProfile}
+            convictionCheck={state.convictionCheck}
           />
         )
-      case 5:
-        return <SummaryStep state={state} onBack={prevStep} />
+      case 7:
+        return (
+          <SummaryStep
+            state={state}
+            onBack={prevStep}
+            onSetPersonalNarrative={setPersonalNarrative}
+          />
+        )
       default:
         return null
     }

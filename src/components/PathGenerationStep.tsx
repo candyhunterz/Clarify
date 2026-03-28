@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback } from 'react'
 import type { ReflectionAnswers, CareerPath } from '../types'
-import { getApiKey, saveApiKey, streamCareerPaths } from '../services/gemini'
+import { getApiKey, saveApiKey, hasEnvApiKey, streamCareerPaths } from '../services/gemini'
 import { ApiKeyModal } from './ApiKeyModal'
 import { PathCard } from './PathCard'
+import { PathExplorePanel } from './PathExplorePanel'
 import { SkeletonCard } from './SkeletonShimmer'
 import { StaleStepBanner } from './StaleStepBanner'
 
@@ -16,6 +17,10 @@ interface PathGenerationStepProps {
   onComplete: () => void
   onBack: () => void
   canComplete: boolean
+  // Exploration props
+  insightProfile?: import('../types').InsightProfile
+  pathExplorations?: import('../types').PathExploration[]
+  onAddExplorationMessage?: (pathId: string, message: import('../types').ConversationMessage) => void
 }
 
 type Status = 'idle' | 'streaming' | 'done' | 'error' | 'cancelled'
@@ -30,16 +35,20 @@ export function PathGenerationStep({
   onComplete,
   onBack,
   canComplete,
+  insightProfile,
+  pathExplorations,
+  onAddExplorationMessage,
 }: PathGenerationStepProps) {
-  const [needsKey, setNeedsKey] = useState(!getApiKey())
+  const [needsKey, setNeedsKey] = useState(!getApiKey() && !hasEnvApiKey())
   const [status, setStatus] = useState<Status>(paths.length > 0 ? 'done' : 'idle')
   const [error, setError] = useState('')
+  const [exploringPathId, setExploringPathId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const generate = useCallback(() => {
     const apiKey = getApiKey()
     if (!apiKey) {
-      setNeedsKey(true)
+      if (!hasEnvApiKey()) setNeedsKey(true)
       return
     }
 
@@ -67,8 +76,9 @@ export function PathGenerationStep({
         },
       },
       controller.signal,
+      insightProfile,
     )
-  }, [reflection, onPathsUpdate])
+  }, [reflection, onPathsUpdate, insightProfile])
 
   const cancel = () => {
     abortRef.current?.abort()
@@ -162,15 +172,20 @@ export function PathGenerationStep({
       {/* Path cards */}
       {showSelection && (
         <div className="space-y-4">
-          {paths.map((path) => (
-            <PathCard
-              key={path.id}
-              path={path}
-              isSelected={selectedPathIds.includes(path.id)}
-              selectionCount={selectedPathIds.length}
-              onToggle={() => onTogglePath(path.id)}
-            />
-          ))}
+          {paths.map((path) => {
+            const exploration = pathExplorations?.find((e) => e.pathId === path.id)
+            return (
+              <PathCard
+                key={path.id}
+                path={path}
+                isSelected={selectedPathIds.includes(path.id)}
+                selectionCount={selectedPathIds.length}
+                onToggle={() => onTogglePath(path.id)}
+                explorationCount={exploration?.messages.filter((m) => m.role === 'user').length}
+                onExplore={onAddExplorationMessage ? () => setExploringPathId(path.id) : undefined}
+              />
+            )
+          })}
         </div>
       )}
 
@@ -221,6 +236,18 @@ export function PathGenerationStep({
           Compare selected
         </button>
       </div>
+
+      {/* Path exploration panel */}
+      {exploringPathId && onAddExplorationMessage && insightProfile && (
+        <PathExplorePanel
+          path={paths.find((p) => p.id === exploringPathId)!}
+          allPaths={paths}
+          insightProfile={insightProfile}
+          messages={pathExplorations?.find((e) => e.pathId === exploringPathId)?.messages ?? []}
+          onAddMessage={onAddExplorationMessage}
+          onClose={() => setExploringPathId(null)}
+        />
+      )}
     </div>
   )
 }

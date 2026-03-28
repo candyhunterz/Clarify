@@ -89,7 +89,7 @@ describe('useWizard - undo/redo', () => {
     })
   })
 
-  describe('changing a step 1 answer marks steps 2-4 as stale', () => {
+  describe('changing a step 1 answer marks steps 2-6 as stale', () => {
     it('marks downstream steps as stale on reflection update', () => {
       const { result } = renderHook(() => useWizard())
 
@@ -100,10 +100,12 @@ describe('useWizard - undo/redo', () => {
       expect(result.current.staleSteps).toContain(2)
       expect(result.current.staleSteps).toContain(3)
       expect(result.current.staleSteps).toContain(4)
+      expect(result.current.staleSteps).toContain(5)
+      expect(result.current.staleSteps).toContain(6)
     })
   })
 
-  describe('changing path selection in step 2 marks steps 3-4 as stale', () => {
+  describe('changing path selection in step 3 marks steps 4-6 as stale', () => {
     it('marks downstream steps as stale on path toggle', () => {
       const { result } = renderHook(() => useWizard())
 
@@ -114,9 +116,10 @@ describe('useWizard - undo/redo', () => {
         result.current.togglePathSelection('path-1')
       })
 
-      expect(result.current.staleSteps).toContain(3)
       expect(result.current.staleSteps).toContain(4)
-      expect(result.current.staleSteps).not.toContain(2)
+      expect(result.current.staleSteps).toContain(5)
+      expect(result.current.staleSteps).toContain(6)
+      expect(result.current.staleSteps).not.toContain(3)
     })
   })
 
