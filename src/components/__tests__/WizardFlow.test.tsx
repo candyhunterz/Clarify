@@ -12,7 +12,45 @@ vi.mock('../../services/gemini', () => ({
   streamCareerPaths: vi.fn(),
   generateMatrixScores: vi.fn(),
   streamActionPlan: vi.fn(),
+  buildTensionPrompt: vi.fn(() => 'tension prompt'),
+  buildConversationFollowUpPrompt: vi.fn(() => 'follow-up prompt'),
+  streamConversationTurn: vi.fn((_key: string, _prompt: string, callbacks: { onText: (t: string) => void; onDone: (t: string) => void }) => {
+    const text = 'What matters most to you about this?'
+    callbacks.onText(text)
+    callbacks.onDone(text)
+    return Promise.resolve()
+  }),
+  generateInsightSynthesis: vi.fn(() => Promise.resolve({
+    profile: {
+      tensions: [],
+      coreValues: [{ value: 'Growth', rank: 1, evidence: 'test' }],
+      hiddenBlockers: [],
+      narrative: 'Test narrative for the user.',
+      conversationLog: [],
+    },
+    valuesHierarchy: {
+      values: [{ value: 'Growth', aiRank: 1, userRank: 1, evidence: 'test' }],
+    },
+  })),
 }))
+
+vi.mock('@google/generative-ai', () => {
+  class MockGoogleGenerativeAI {
+    getGenerativeModel() {
+      return {
+        generateContent: () => Promise.resolve({
+          response: {
+            text: () => JSON.stringify({
+              tensions: [{ description: 'test tension', question: 'What do you think?' }],
+              firstQuestion: 'What do you think about your career direction?',
+            }),
+          },
+        }),
+      }
+    }
+  }
+  return { GoogleGenerativeAI: MockGoogleGenerativeAI }
+})
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
@@ -117,12 +155,39 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // ────────────────────────────────────────────
-    // Step 2: Discover (placeholder)
+    // Step 2: Discover (AI conversation)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
       expect(screen.getByText("Let's dig deeper")).toBeInTheDocument()
     })
+
+    // Start the AI conversation
+    await user.click(screen.getByRole('button', { name: 'Start conversation' }))
+
+    // Wait for AI's first question
+    await waitFor(() => {
+      expect(screen.getByText('What do you think about your career direction?')).toBeInTheDocument()
+    })
+
+    // Complete the conversation (4 exchanges to trigger synthesis)
+    for (let i = 0; i < 4; i++) {
+      const input = screen.getByPlaceholderText('Type your response...')
+      await user.type(input, 'I value growth and learning.')
+      await user.click(screen.getByRole('button', { name: 'Send' }))
+
+      if (i < 3) {
+        await waitFor(() => {
+          expect(screen.getByPlaceholderText('Type your response...')).toBeInTheDocument()
+        })
+      }
+    }
+
+    // Wait for synthesis and review
+    await waitFor(() => {
+      expect(screen.getByText('Test narrative for the user.')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // ────────────────────────────────────────────

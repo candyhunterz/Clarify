@@ -347,8 +347,7 @@ export function useWizard() {
       case 1:
         return isReflectionComplete(state.reflection)
       case 2:
-        // Placeholder: always allow advancing until DiscoverStep is fully implemented
-        return true
+        return state.insightProfile.narrative !== ''
       case 3:
         return state.selectedPathIds.length >= 2 && state.selectedPathIds.length <= 4
       case 4: {
