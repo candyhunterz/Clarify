@@ -96,12 +96,37 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByText('Design'))
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
-    // Q7: Success vision (OpenEnded) — last question, click "Continue"
+    // Q7: Success vision (OpenEnded) — skip
     expect(screen.getByText('What would success look like in 2 years?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q8: Regret decision (OpenEnded) — skip
+    expect(screen.getByText(/Think of a career decision you regret/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q9: Good at but don't want (OpenEnded) — skip
+    expect(screen.getByText(/What's something you're good at/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q10: If money were equal (OpenEnded) — skip
+    expect(screen.getByText(/If money were equal/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Q11: Belief to change (OpenEnded) — last question, click "Continue"
+    expect(screen.getByText(/What would you need to believe/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     // ────────────────────────────────────────────
-    // Step 2: Explore
+    // Step 2: Discover (placeholder)
+    // ────────────────────────────────────────────
+
+    await waitFor(() => {
+      expect(screen.getByText("Let's dig deeper")).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    // ────────────────────────────────────────────
+    // Step 3: Explore
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -128,7 +153,7 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Compare selected' }))
 
     // ────────────────────────────────────────────
-    // Step 3: Compare (Decision Matrix)
+    // Step 4: Compare (Decision Matrix)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -147,7 +172,16 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Generate action plan' }))
 
     // ────────────────────────────────────────────
-    // Step 4: Plan (Action Plan)
+    // Step 5: Commit (placeholder)
+    // ────────────────────────────────────────────
+
+    await waitFor(() => {
+      expect(screen.getByText('Does this feel right?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Generate plan' }))
+
+    // ────────────────────────────────────────────
+    // Step 6: Plan (Action Plan)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
@@ -167,7 +201,7 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'View summary' }))
 
     // ────────────────────────────────────────────
-    // Step 5: Summary
+    // Step 7: Summary
     // ────────────────────────────────────────────
 
     await waitFor(() => {

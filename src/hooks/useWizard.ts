@@ -347,7 +347,8 @@ export function useWizard() {
       case 1:
         return isReflectionComplete(state.reflection)
       case 2:
-        return state.insightProfile.narrative !== ''
+        // Placeholder: always allow advancing until DiscoverStep is fully implemented
+        return true
       case 3:
         return state.selectedPathIds.length >= 2 && state.selectedPathIds.length <= 4
       case 4: {
@@ -359,7 +360,8 @@ export function useWizard() {
         )
       }
       case 5:
-        return state.convictionCheck !== null
+        // Placeholder: always allow advancing until CommitStep is fully implemented
+        return true
       case 6:
         return state.actionPlan !== null
       default:

@@ -31,8 +31,8 @@ vi.mock('framer-motion', () => ({
   },
 }))
 
-/** Navigate through Step 1 (Reflect) with minimal required answers to reach Step 2 */
-async function completeReflectionStep(user: ReturnType<typeof userEvent.setup>) {
+/** Navigate through Step 1 (Reflect) and Step 2 (Discover placeholder) to reach Step 3 (Explore) */
+async function completeReflectionAndDiscoverSteps(user: ReturnType<typeof userEvent.setup>) {
   // Q0: Energizers
   await user.click(screen.getByText('Building UI'))
   await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -58,10 +58,28 @@ async function completeReflectionStep(user: ReturnType<typeof userEvent.setup>) 
   await user.click(screen.getByText('Tech / coding'))
   await user.click(screen.getByRole('button', { name: 'Next' }))
 
-  // Q7: Success vision — click Continue
+  // Q7: Success vision — skip
+  await user.click(screen.getByRole('button', { name: 'Next' }))
+
+  // Q8: Regret decision — skip
+  await user.click(screen.getByRole('button', { name: 'Next' }))
+
+  // Q9: Good at but don't want — skip
+  await user.click(screen.getByRole('button', { name: 'Next' }))
+
+  // Q10: If money were equal — skip
+  await user.click(screen.getByRole('button', { name: 'Next' }))
+
+  // Q11: Belief to change — last question, click Continue to advance to Step 2 (Discover)
   await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-  // Now on Step 2
+  // Step 2: Discover (placeholder) — click Continue to advance to Step 3 (Explore)
+  await waitFor(() => {
+    expect(screen.getByText("Let's dig deeper")).toBeInTheDocument()
+  })
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+  // Now on Step 3 (Explore)
   await waitFor(() => {
     expect(screen.getByText('Your career paths')).toBeInTheDocument()
   })
@@ -84,7 +102,7 @@ describe('Streaming behavior', () => {
     })
 
     render(<App />)
-    await completeReflectionStep(user)
+    await completeReflectionAndDiscoverSteps(user)
 
     // Click "Generate paths"
     await user.click(screen.getByRole('button', { name: 'Generate paths' }))
@@ -127,7 +145,7 @@ describe('Streaming behavior', () => {
     })
 
     render(<App />)
-    await completeReflectionStep(user)
+    await completeReflectionAndDiscoverSteps(user)
 
     // Click "Generate paths"
     await user.click(screen.getByRole('button', { name: 'Generate paths' }))
@@ -163,7 +181,7 @@ describe('Streaming behavior', () => {
     })
 
     render(<App />)
-    await completeReflectionStep(user)
+    await completeReflectionAndDiscoverSteps(user)
 
     // Click "Generate paths"
     await user.click(screen.getByRole('button', { name: 'Generate paths' }))

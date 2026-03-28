@@ -1,5 +1,5 @@
 import type { ReflectionAnswers, CareerPath, MatrixScore, ActionPlan, WizardState } from '../types'
-import { createInitialReflection, createInitialMatrix } from '../types'
+import { createInitialReflection, createInitialMatrix, createInitialInsightProfile, createInitialValuesHierarchy } from '../types'
 
 export function createCompletedReflection(): ReflectionAnswers {
   return {
@@ -20,6 +20,10 @@ export function createCompletedReflection(): ReflectionAnswers {
     energyLevel: 3,
     learningInterests: ['Tech / coding', 'Design'],
     successVision: 'Leading a small product team',
+    regretDecision: 'Almost joined a startup but played it safe',
+    goodAtButDontWant: 'Debugging legacy systems',
+    ifMoneyEqual: 'Would focus more on creative work',
+    beliefToChange: 'That I am too specialized to pivot',
   }
 }
 
@@ -129,15 +133,21 @@ export function createMockActionPlan(): ActionPlan {
 
 export function createFullWizardState(): WizardState {
   return {
-    currentStep: 5,
+    currentStep: 7,
     reflection: createCompletedReflection(),
+    insightProfile: createInitialInsightProfile(),
+    valuesHierarchy: createInitialValuesHierarchy(),
     paths: createMockPaths(),
     selectedPathIds: ['path-1', 'path-3'],
+    pathExplorations: [],
     matrix: {
       ...createInitialMatrix(),
       scores: createMockScores(),
     },
+    scenarios: [],
+    convictionCheck: null,
     actionPlan: createMockActionPlan(),
+    personalNarrative: '',
   }
 }
 
@@ -145,9 +155,15 @@ export function createInitialWizardState(): WizardState {
   return {
     currentStep: 1,
     reflection: createInitialReflection(),
+    insightProfile: createInitialInsightProfile(),
+    valuesHierarchy: createInitialValuesHierarchy(),
     paths: [],
     selectedPathIds: [],
+    pathExplorations: [],
     matrix: createInitialMatrix(),
+    scenarios: [],
+    convictionCheck: null,
     actionPlan: null,
+    personalNarrative: '',
   }
 }
