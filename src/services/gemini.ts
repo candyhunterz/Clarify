@@ -264,6 +264,139 @@ export interface ActionPlanStreamCallbacks {
   onDone: () => void
 }
 
+function buildEnhancedActionPlanPrompt(
+  path: CareerPath,
+  insightProfile: import('../types').InsightProfile,
+  convictionCheck: import('../types').ConvictionCheck | null,
+): string {
+  const blockersText = insightProfile.hiddenBlockers.length > 0
+    ? insightProfile.hiddenBlockers.map((b) => `- ${b.belief} (from: ${b.source})`).join('\n')
+    : '(none identified)'
+
+  const convictionText = convictionCheck
+    ? `Their conviction response: "${convictionCheck.response}". Their reasoning: ${convictionCheck.reasoning || '(not shared)'}`
+    : '(no conviction check completed)'
+
+  return `Create a concrete, specific 30/60/90 day action plan for someone transitioning to: "${path.title}" — ${path.description}.
+
+Context about this path:
+- Skills they already have: ${path.skillsHave.join(', ')}
+- Skills they need to build: ${path.skillsNeed.join(', ')}
+- Timeline: ${path.timeline}
+- Risk level: ${path.riskLevel}
+
+Deep context about this person:
+**Narrative:** ${insightProfile.narrative || '(not available)'}
+**Hidden blockers (limiting beliefs):**
+${blockersText}
+**Conviction check:** ${convictionText}
+
+Return ONLY a JSON object (no markdown, no code fences) with this exact shape:
+{
+  "phases": [
+    {
+      "title": "Research & Foundations",
+      "timeframe": "Days 1–30",
+      "items": ["specific action 1", "specific action 2", "specific action 3"]
+    },
+    {
+      "title": "Build & Practice",
+      "timeframe": "Days 31–60",
+      "items": ["specific action 1", "specific action 2", "specific action 3"]
+    },
+    {
+      "title": "Launch & Apply",
+      "timeframe": "Days 61–90",
+      "items": ["specific action 1", "specific action 2", "specific action 3"]
+    }
+  ],
+  "resources": ["specific course/book/community 1", "specific course/book/community 2"],
+  "resumeTips": ["specific tip 1", "specific tip 2"],
+  "interviewPrep": ["specific guidance 1", "specific guidance 2"],
+  "riskMitigation": ["what to do if X", "fallback plan Y"],
+  "biggestRisk": {
+    "belief": "the most dangerous limiting belief this person holds that could derail this transition",
+    "reframe": "a concrete reframe that challenges this belief directly",
+    "earlyActions": ["a specific early action to address this belief", "another early action"]
+  },
+  "identityMilestones": [
+    { "timeframe": "Week 2", "milestone": "a moment when they will feel like a different person" },
+    { "timeframe": "Month 2", "milestone": "another identity shift milestone" },
+    { "timeframe": "Month 3", "milestone": "a milestone that marks real arrival in this new path" }
+  ],
+  "checkpoints": [
+    {
+      "timeframe": "Day 30",
+      "question": "the key yes/no question to ask themselves at this point",
+      "greenLight": "what a good signal looks like — continue",
+      "offRamp": "what a warning signal looks like — reconsider"
+    },
+    {
+      "timeframe": "Day 60",
+      "question": "the key yes/no question to ask themselves at this point",
+      "greenLight": "what a good signal looks like — continue",
+      "offRamp": "what a warning signal looks like — reconsider"
+    },
+    {
+      "timeframe": "Day 90",
+      "question": "the key yes/no question to ask themselves at this point",
+      "greenLight": "what a good signal looks like — continue",
+      "offRamp": "what a warning signal looks like — reconsider"
+    }
+  ]
+}
+
+Each phase should have 3-5 items. All recommendations must be specific (name real courses, communities, tools) — not generic advice. The biggestRisk should directly reference the person's actual limiting beliefs, not generic risk. The identityMilestones should feel personal and specific to their narrative.`
+}
+
+export async function streamEnhancedActionPlan(
+  apiKey: string,
+  path: CareerPath,
+  insightProfile: import('../types').InsightProfile,
+  convictionCheck: import('../types').ConvictionCheck | null,
+  callbacks: ActionPlanStreamCallbacks,
+  signal: AbortSignal,
+): Promise<void> {
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+
+  let accumulated = ''
+
+  try {
+    const result = await model.generateContentStream({
+      contents: [{ role: 'user', parts: [{ text: buildEnhancedActionPlanPrompt(path, insightProfile, convictionCheck) }] }],
+    })
+
+    for await (const chunk of result.stream) {
+      if (signal.aborted) return
+      accumulated += chunk.text()
+      callbacks.onText(accumulated)
+    }
+
+    // Parse the complete response
+    const cleaned = accumulated.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim()
+    const raw = JSON.parse(cleaned) as Omit<ActionPlan, 'targetPathId' | 'targetPathTitle'>
+
+    callbacks.onPlan({
+      targetPathId: path.id,
+      targetPathTitle: path.title,
+      phases: raw.phases ?? [],
+      resources: raw.resources ?? [],
+      resumeTips: raw.resumeTips ?? [],
+      interviewPrep: raw.interviewPrep ?? [],
+      riskMitigation: raw.riskMitigation ?? [],
+      biggestRisk: raw.biggestRisk,
+      identityMilestones: raw.identityMilestones,
+      checkpoints: raw.checkpoints,
+    })
+    callbacks.onDone()
+  } catch (err: unknown) {
+    if (signal.aborted) return
+    const message = err instanceof Error ? err.message : 'Failed to generate action plan'
+    callbacks.onError(message)
+  }
+}
+
 export async function streamActionPlan(
   apiKey: string,
   path: CareerPath,
@@ -557,4 +690,76 @@ export async function generateInsightSynthesis(
   }
 
   return { profile, valuesHierarchy }
+}
+
+function buildPersonalNarrativePrompt(
+  insightProfile: import('../types').InsightProfile,
+  convictionCheck: import('../types').ConvictionCheck | null,
+  chosenPath: CareerPath,
+  matrixTopPath: CareerPath | null,
+): string {
+  const coreValues = insightProfile.coreValues
+    .slice(0, 3)
+    .map((v) => v.value)
+    .join(', ')
+
+  const tensions = insightProfile.tensions
+    .slice(0, 2)
+    .map((t) => t.description)
+    .join('; ')
+
+  const blockers = insightProfile.hiddenBlockers
+    .slice(0, 1)
+    .map((b) => b.belief)
+    .join('')
+
+  const overrodeMatrix =
+    convictionCheck !== null &&
+    matrixTopPath !== null &&
+    convictionCheck.response === 'override' &&
+    chosenPath.id !== matrixTopPath.id
+
+  return `You are a career coach writing a personal narrative for someone who just completed a deep career reflection session.
+
+**About this person:**
+- Core values: ${coreValues || '(not identified)'}
+- Key tensions: ${tensions || '(none identified)'}
+- Biggest hidden blocker: ${blockers || '(none identified)'}
+- Their own narrative summary: ${insightProfile.narrative || '(not provided)'}
+
+**Their decision:**
+- Chosen path: ${chosenPath.title} — ${chosenPath.description}
+- Why it fits: ${chosenPath.whyItFits}
+${overrodeMatrix && matrixTopPath ? `- The decision matrix ranked "${matrixTopPath.title}" #1, but they chose "${chosenPath.title}" instead (gut override).\n` : ''}- Biggest blocker to address: ${blockers || '(none identified)'}
+
+Write a 2-3 paragraph personal narrative in second person ("you") that:
+1. Connects their core values and tensions to why this path makes sense for them specifically
+${overrodeMatrix ? '2. Honestly acknowledges the gap between what the numbers said and what their gut chose — and why that might be the right call\n' : ''}3. Names their biggest blocker and frames the action plan ahead as a direct response to it
+4. Feels personal, warm, and specific to them — not generic career advice
+
+Return ONLY the narrative text. No headings, no JSON, no formatting — just the paragraphs.`
+}
+
+export async function generatePersonalNarrative(
+  apiKey: string,
+  insightProfile: import('../types').InsightProfile,
+  convictionCheck: import('../types').ConvictionCheck | null,
+  chosenPath: CareerPath,
+  matrixTopPath: CareerPath | null,
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+
+  const prompt = buildPersonalNarrativePrompt(
+    insightProfile,
+    convictionCheck,
+    chosenPath,
+    matrixTopPath,
+  )
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  })
+
+  return result.response.text().trim()
 }

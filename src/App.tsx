@@ -34,6 +34,7 @@ function App() {
     setMatrixScores,
     setConvictionCheck,
     setActionPlan,
+    setPersonalNarrative,
     addPathExplorationMessage,
     undo,
     redo,
@@ -154,10 +155,18 @@ function App() {
             onComplete={nextStep}
             onBack={prevStep}
             canComplete={canAdvance()}
+            insightProfile={state.insightProfile}
+            convictionCheck={state.convictionCheck}
           />
         )
       case 7:
-        return <SummaryStep state={state} onBack={prevStep} />
+        return (
+          <SummaryStep
+            state={state}
+            onBack={prevStep}
+            onSetPersonalNarrative={setPersonalNarrative}
+          />
+        )
       default:
         return null
     }
