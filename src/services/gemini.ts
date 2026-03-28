@@ -62,6 +62,59 @@ Return ONLY a JSON array (no markdown, no code fences) where each element has th
 Use sequential ids like "path-1", "path-2", etc. Be specific and realistic — not generic advice.`
 }
 
+function buildEnhancedReflectionPrompt(answers: ReflectionAnswers, insightProfile?: import('../types').InsightProfile): string {
+  if (!insightProfile?.narrative) {
+    return buildReflectionPrompt(answers)
+  }
+
+  const coreValuesText = insightProfile.coreValues.length > 0
+    ? insightProfile.coreValues
+        .sort((a, b) => a.rank - b.rank)
+        .map((v) => `  ${v.rank}. ${v.value} — ${v.evidence}`)
+        .join('\n')
+    : '  (none identified)'
+
+  const blockersText = insightProfile.hiddenBlockers.length > 0
+    ? insightProfile.hiddenBlockers.map((b) => `  - ${b.belief} (from: ${b.source})`).join('\n')
+    : '  (none identified)'
+
+  return `Here is a software developer's deep self-reflection profile, including a coaching summary:
+
+**Coaching Summary:**
+${insightProfile.narrative}
+
+**Core Values (ranked by conversation):**
+${coreValuesText}
+
+**Hidden Blockers (limiting beliefs):**
+${blockersText}
+
+**Raw Reflection Data:**
+${formatReflectionForPrompt(answers)}
+
+Based on this enriched profile, generate 4-6 personalized career paths. Include a mix from these categories:
+- Level up in current track (e.g., senior role at a better company)
+- Specialize (frontend, backend, DevOps, data engineering, mobile, etc.)
+- Adjacent pivot (product management, UX design, dev rel, technical writing, engineering management)
+- Bigger pivot (only if the profile suggests low interest in staying in tech)
+
+Return ONLY a JSON array (no markdown, no code fences) where each element has this exact shape:
+{
+  "id": "path-1",
+  "title": "string",
+  "description": "one-line description",
+  "whyItFits": "why this fits — reference the person's specific tensions and values from the coaching summary",
+  "salaryRange": { "entry": "$X", "experienced": "$Y" },
+  "skillsHave": ["skill1", "skill2"],
+  "skillsNeed": ["skill1", "skill2"],
+  "timeline": "realistic transition timeline",
+  "riskLevel": "low" | "medium" | "high",
+  "dayInTheLife": "3-4 sentence day-in-the-life summary"
+}
+
+Use sequential ids like "path-1", "path-2", etc. Be specific and realistic — not generic advice. In the whyItFits field, directly reference this person's named tensions, core values, and blockers from the coaching summary above.`
+}
+
 /** Extract complete JSON objects from a partial stream of text. */
 function extractPaths(text: string): { paths: CareerPath[]; lastEnd: number } {
   const paths: CareerPath[] = []
@@ -122,6 +175,7 @@ export async function streamCareerPaths(
   reflection: ReflectionAnswers,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
+  insightProfile?: import('../types').InsightProfile,
 ): Promise<void> {
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
@@ -131,7 +185,7 @@ export async function streamCareerPaths(
 
   try {
     const result = await model.generateContentStream({
-      contents: [{ role: 'user', parts: [{ text: buildReflectionPrompt(reflection) }] }],
+      contents: [{ role: 'user', parts: [{ text: buildEnhancedReflectionPrompt(reflection, insightProfile) }] }],
     })
 
     for await (const chunk of result.stream) {

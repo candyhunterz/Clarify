@@ -76,8 +76,9 @@ export function PathGenerationStep({
         },
       },
       controller.signal,
+      insightProfile,
     )
-  }, [reflection, onPathsUpdate])
+  }, [reflection, onPathsUpdate, insightProfile])
 
   const cancel = () => {
     abortRef.current?.abort()
