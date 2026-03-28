@@ -399,6 +399,33 @@ The action plan Gemini prompt is rebuilt to include:
 
 ---
 
+## Section 8.5: Comprehensive PDF Export
+
+### What
+
+The PDF export is expanded from a simple summary dump to a full career coaching document. Someone should be able to hand this to a mentor or career coach and they'd have complete context on the entire journey.
+
+### PDF Structure (in order)
+
+1. **Title + date** — "Clarify — Career Clarity Report"
+2. **Personal narrative** — the AI-written story (Section 7)
+3. **Reflection** — all 12 question answers, including the 4 deep questions with full text
+4. **Coaching insights** — the AI synthesis narrative, then:
+   - **Tensions explored** — each tension with the question asked, user's response, and resolution
+   - **Values hierarchy** — ranked list with evidence and slider conflict callouts
+   - **Hidden blockers** — each belief and its source
+   - **Conversation transcript** — full coaching dialogue (Coach/You format)
+5. **Career paths explored** — all paths with selected paths getting full detail (why it fits, salary, skills, timeline). For paths the user explored via chat, include the Q&A highlights
+6. **Decision matrix rankings** — scores + weights used + **scenario analysis** (which path wins under each "what if" scenario)
+7. **Your decision** — conviction check context: what the matrix said, what the user chose, why. If they overrode the matrix, explain the gap. Include any conviction check conversation
+8. **Action plan** — leading with biggest risk/reframe, then 30/60/90 phases, identity milestones, decision checkpoints (with green light / off-ramp), and all supporting sections (resources, resume tips, interview prep, risk mitigation)
+
+### Why This Matters
+
+The PDF is the primary tangible output of the tool. Everything else happens in-browser and disappears. If the PDF doesn't capture the depth of the experience, the user loses the most valuable parts — the tensions they resolved, the values they discovered, the identity blockers they named. A shallow PDF undermines the entire point of going deeper.
+
+---
+
 ## Section 9: Environment Variable for API Key
 
 ### What

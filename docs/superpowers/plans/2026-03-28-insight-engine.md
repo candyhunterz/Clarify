@@ -3699,74 +3699,509 @@ git commit -m "feat: add personal narrative generation to summary step"
 
 ---
 
-### Task 13: Update PDF export for new sections
+### Task 13: Comprehensive PDF export — full career coaching document
+
+The PDF should read like a complete career coaching session transcript + action plan. Someone should be able to hand this to a mentor or career coach and they'd have full context.
 
 **Files:**
 - Modify: `src/services/pdf.ts`
 
-- [ ] **Step 1: Update exportPdf to include narrative and enhanced action plan sections**
+- [ ] **Step 1: Rewrite exportPdf with all new sections**
 
-In `src/services/pdf.ts`, add the narrative section after the title and before Reflection Highlights:
+Replace the entire `exportPdf` function in `src/services/pdf.ts` with a comprehensive version. The PDF structure is:
+
+1. Title + date
+2. Personal narrative ("Your Story")
+3. Reflection highlights (original 8 answers + 4 deep questions)
+4. Coaching conversation (tensions, resolutions, values hierarchy, hidden blockers)
+5. Career paths explored (with path exploration Q&A highlights)
+6. Decision matrix rankings + sensitivity analysis
+7. Conviction check context
+8. Full action plan (phases + biggest risk + identity milestones + checkpoints + supporting sections)
 
 ```typescript
-  // --- Personal Narrative ---
+export function exportPdf(state: WizardState): void {
+  const doc = new jsPDF()
+  let y = MARGIN
+
+  const addPage = () => {
+    doc.addPage()
+    y = MARGIN
+  }
+  const checkPage = (need: number) => {
+    if (y + need > 280) addPage()
+  }
+
+  // --- Title ---
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.setTextColor(30, 41, 59) // slate-800
+  doc.text('Clarify — Career Clarity Report', MARGIN, y)
+  y += 12
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139) // slate-500
+  doc.text(`Generated ${new Date().toLocaleDateString()}`, MARGIN, y)
+  y += SECTION_GAP + 4
+
+  // ─── 1. Personal Narrative ───
   if (state.personalNarrative) {
     sectionHeading(doc, 'Your Story', y)
     y += 8
     y = wrappedText(doc, y, state.personalNarrative, 10)
     y += SECTION_GAP
   }
-```
 
-After the action plan phases and supporting sections, add:
+  // ─── 2. Reflection Highlights ───
+  sectionHeading(doc, 'Reflection', y)
+  y += 8
 
-```typescript
-    // Enhanced sections
-    if (state.actionPlan.biggestRisk) {
-      checkPage(24)
+  const r = state.reflection
+  y = bulletList(doc, y, [
+    `Energizers: ${r.energizers.join(', ')}`,
+    `Drainers: ${r.drainers.join(', ')}`,
+    `Coding in 5 years: ${r.codingIn5Years}`,
+    `Energy level: ${r.energyLevel}/5`,
+    `Learning interests: ${r.learningInterests.join(', ')}`,
+  ])
+
+  if (r.keepInJob) {
+    checkPage(LINE_H * 2)
+    y = wrappedText(doc, y, `Would keep: ${r.keepInJob}`)
+  }
+  if (r.successVision) {
+    checkPage(LINE_H * 2)
+    y = wrappedText(doc, y, `Success in 2 years: ${r.successVision}`)
+  }
+
+  // Top priorities
+  const topPriorities = Object.entries(r.priorities)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 4)
+    .map(([key, val]) => `${PRIORITY_LABELS[key] ?? key} (${val}/5)`)
+  y += 2
+  y = wrappedText(doc, y, `Top priorities: ${topPriorities.join(', ')}`)
+
+  // Deep reflection answers
+  const deepAnswers: [string, string][] = [
+    ['Career decision regret/near-miss', r.regretDecision],
+    ['Good at but don\'t want to do', r.goodAtButDontWant],
+    ['If money were equal', r.ifMoneyEqual],
+    ['Belief needed to change', r.beliefToChange],
+  ]
+  for (const [label, value] of deepAnswers) {
+    if (value) {
+      checkPage(LINE_H * 3)
+      y += 2
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
-      doc.setTextColor(180, 83, 9) // amber-700
-      doc.text('Your Biggest Risk', MARGIN, y)
+      doc.setTextColor(71, 85, 105)
+      doc.text(label, MARGIN, y)
       y += LINE_H
       doc.setFont('helvetica', 'normal')
-      doc.setTextColor(71, 85, 105)
-      y = wrappedText(doc, y, state.actionPlan.biggestRisk.belief, 9)
-      y = wrappedText(doc, y, `Reframe: ${state.actionPlan.biggestRisk.reframe}`, 9)
-      y = bulletList(doc, y, state.actionPlan.biggestRisk.earlyActions, 8)
-      y += 3
+      y = wrappedText(doc, y, value, 9)
     }
+  }
+  y += SECTION_GAP
 
-    if (state.actionPlan.identityMilestones && state.actionPlan.identityMilestones.length > 0) {
+  // ─── 3. Coaching Conversation ───
+  if (state.insightProfile && state.insightProfile.narrative) {
+    checkPage(30)
+    sectionHeading(doc, 'Coaching Insights', y)
+    y += 8
+
+    // AI synthesis
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(71, 85, 105)
+    y = wrappedText(doc, y, state.insightProfile.narrative, 9)
+    y += 4
+
+    // Tensions & resolutions
+    if (state.insightProfile.tensions.length > 0) {
       checkPage(16)
       doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(30, 41, 59)
+      doc.text('Tensions Explored', MARGIN, y)
+      y += LINE_H + 1
+
+      for (const tension of state.insightProfile.tensions) {
+        checkPage(LINE_H * 6)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(79, 70, 229) // indigo-600
+        y = wrappedText(doc, y, `Tension: ${tension.description}`, 9)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(71, 85, 105)
+        if (tension.question) {
+          y = wrappedText(doc, y, `Q: ${tension.question}`, 8)
+        }
+        if (tension.response) {
+          y = wrappedText(doc, y, `A: ${tension.response}`, 8)
+        }
+        if (tension.resolution) {
+          doc.setFont('helvetica', 'bold')
+          y = wrappedText(doc, y, `Resolution: ${tension.resolution}`, 8)
+          doc.setFont('helvetica', 'normal')
+        }
+        y += 3
+      }
+    }
+
+    // Values hierarchy
+    if (state.valuesHierarchy && state.valuesHierarchy.values.length > 0) {
+      checkPage(20)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(30, 41, 59)
+      doc.text('Values Hierarchy', MARGIN, y)
+      y += LINE_H + 1
+
+      const sortedValues = [...state.valuesHierarchy.values].sort((a, b) => a.userRank - b.userRank)
+      for (const v of sortedValues) {
+        checkPage(LINE_H * 3)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(30, 41, 59)
+        doc.text(`${v.userRank}. ${v.value}`, MARGIN, y)
+        y += LINE_H
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(100, 116, 139)
+        y = wrappedText(doc, y, `Evidence: ${v.evidence}`, 8)
+
+        if (v.sliderConflict) {
+          doc.setTextColor(180, 83, 9) // amber-700
+          y = wrappedText(doc, y, `Note: ${v.sliderConflict}`, 8)
+          doc.setTextColor(100, 116, 139)
+        }
+        y += 1
+      }
+    }
+
+    // Hidden blockers
+    if (state.insightProfile.hiddenBlockers.length > 0) {
+      checkPage(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(180, 83, 9) // amber-700
+      doc.text('Hidden Blockers', MARGIN, y)
+      y += LINE_H + 1
+
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
-      doc.setTextColor(109, 40, 217) // violet-700
-      doc.text('Identity Milestones', MARGIN, y)
-      y += LINE_H
+      doc.setTextColor(71, 85, 105)
       y = bulletList(
         doc, y,
-        state.actionPlan.identityMilestones.map((m) => `${m.timeframe}: ${m.milestone}`),
-        8,
+        state.insightProfile.hiddenBlockers.map((b) => `"${b.belief}" — surfaced from: ${b.source}`),
+        9,
       )
-      y += 3
     }
 
-    if (state.actionPlan.checkpoints && state.actionPlan.checkpoints.length > 0) {
-      checkPage(16)
+    // Conversation log
+    if (state.insightProfile.conversationLog.length > 0) {
+      checkPage(20)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(71, 85, 105)
-      doc.text('Decision Checkpoints', MARGIN, y)
-      y += LINE_H
-      for (const cp of state.actionPlan.checkpoints) {
-        checkPage(LINE_H * 4)
-        y = wrappedText(doc, y, `${cp.timeframe}: ${cp.question}`, 9)
-        y = wrappedText(doc, y, `  Green light: ${cp.greenLight}`, 8)
-        y = wrappedText(doc, y, `  Off-ramp: ${cp.offRamp}`, 8)
+      doc.setFontSize(10)
+      doc.setTextColor(30, 41, 59)
+      doc.text('Conversation Transcript', MARGIN, y)
+      y += LINE_H + 1
+
+      for (const msg of state.insightProfile.conversationLog) {
+        checkPage(LINE_H * 3)
+        const prefix = msg.role === 'assistant' ? 'Coach' : 'You'
+        doc.setFont('helvetica', msg.role === 'assistant' ? 'bold' : 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(msg.role === 'assistant' ? 79 : 30, msg.role === 'assistant' ? 70 : 41, msg.role === 'assistant' ? 229 : 59)
+        y = wrappedText(doc, y, `${prefix}: ${msg.content}`, 8)
         y += 2
       }
     }
+
+    y += SECTION_GAP
+  }
+
+  // ─── 4. Career Paths ───
+  checkPage(20)
+  sectionHeading(doc, 'Career Paths Explored', y)
+  y += 8
+
+  for (const path of state.paths) {
+    checkPage(30)
+    const isSelected = state.selectedPathIds.includes(path.id)
+    doc.setFont('helvetica', isSelected ? 'bold' : 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(30, 41, 59)
+    const marker = isSelected ? '★ ' : '  '
+    doc.text(`${marker}${path.title}`, MARGIN, y)
+    y += LINE_H
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 116, 139)
+    y = wrappedText(doc, y, path.description, 8)
+
+    if (isSelected) {
+      y = wrappedText(doc, y, `Why it fits: ${path.whyItFits}`, 8)
+      y = wrappedText(doc, y, `Salary: ${path.salaryRange.entry} → ${path.salaryRange.experienced} | Timeline: ${path.timeline} | Risk: ${path.riskLevel}`, 8)
+      y = wrappedText(doc, y, `Skills you have: ${path.skillsHave.join(', ')}`, 8)
+      y = wrappedText(doc, y, `Skills to build: ${path.skillsNeed.join(', ')}`, 8)
+    }
+
+    // Path exploration Q&A
+    const exploration = state.pathExplorations.find((e) => e.pathId === path.id)
+    if (exploration && exploration.messages.length > 0) {
+      checkPage(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(79, 70, 229)
+      doc.text(`  Exploration (${exploration.messages.filter((m) => m.role === 'user').length} questions)`, MARGIN, y)
+      y += LINE_H
+
+      for (const msg of exploration.messages) {
+        checkPage(LINE_H * 2)
+        const prefix = msg.role === 'user' ? 'Q' : 'A'
+        doc.setFont('helvetica', msg.role === 'user' ? 'bold' : 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(71, 85, 105)
+        y = wrappedText(doc, y, `  ${prefix}: ${msg.content}`, 8)
+        y += 1
+      }
+    }
+
+    y += 3
+  }
+  y += SECTION_GAP - 3
+
+  // ─── 5. Decision Matrix Rankings ───
+  checkPage(30)
+  sectionHeading(doc, 'Decision Matrix Rankings', y)
+  y += 8
+
+  const rankings = state.selectedPathIds
+    .map((pid) => {
+      const p = state.paths.find((p) => p.id === pid)
+      let total = 0
+      for (const c of MATRIX_CRITERIA) {
+        total += (state.matrix.weights[c.id] ?? 3) * (state.matrix.scores[pid]?.[c.id]?.score ?? 0)
+      }
+      return { title: p?.title ?? pid, total }
+    })
+    .sort((a, b) => b.total - a.total)
+
+  for (const r of rankings) {
+    checkPage(LINE_H)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30, 41, 59)
+    doc.text(`${r.title}`, MARGIN, y)
+    doc.text(`${r.total.toFixed(1)}`, MARGIN + PAGE_W, y, { align: 'right' })
+    y += LINE_H + 1
+  }
+
+  // Weights used
+  y += 2
+  doc.setFontSize(8)
+  doc.setTextColor(100, 116, 139)
+  const weightsList = MATRIX_CRITERIA.map((c) => `${c.label}: ${state.matrix.weights[c.id] ?? 3}/5`).join(', ')
+  y = wrappedText(doc, y, `Weights: ${weightsList}`, 8)
+
+  // Sensitivity analysis
+  const PRESET_SCENARIOS = [
+    { name: 'Money doesn\'t matter', weights: { salary: 1 } },
+    { name: 'Prioritize growth', weights: { learning: 5 } },
+    { name: 'Need to switch fast', weights: { transition: 5 } },
+    { name: 'Stability is everything', weights: { demand: 5, creative: 1 } },
+  ]
+
+  const scenarioResults: string[] = []
+  for (const scenario of PRESET_SCENARIOS) {
+    const tempWeights = { ...state.matrix.weights, ...scenario.weights }
+    let topTitle = ''
+    let topTotal = -1
+    for (const pid of state.selectedPathIds) {
+      let t = 0
+      for (const c of MATRIX_CRITERIA) {
+        t += (tempWeights[c.id] ?? 3) * (state.matrix.scores[pid]?.[c.id]?.score ?? 0)
+      }
+      if (t > topTotal) {
+        topTotal = t
+        const p = state.paths.find((p) => p.id === pid)
+        topTitle = p?.title ?? pid
+      }
+    }
+    scenarioResults.push(`${scenario.name}: ${topTitle} wins`)
+  }
+
+  checkPage(LINE_H * (scenarioResults.length + 2))
+  y += 4
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(71, 85, 105)
+  doc.text('Scenario Analysis', MARGIN, y)
+  y += LINE_H
+  y = bulletList(doc, y, scenarioResults, 8)
+
+  y += SECTION_GAP
+
+  // ─── 6. Conviction Check ───
+  if (state.convictionCheck) {
+    checkPage(20)
+    sectionHeading(doc, 'Your Decision', y)
+    y += 8
+
+    const chosenPath = state.paths.find((p) => p.id === state.convictionCheck!.chosenPath)
+    const matrixTopPath = state.paths.find((p) => p.id === state.convictionCheck!.matrixTopPath)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(30, 41, 59)
+    doc.text(`Chosen path: ${chosenPath?.title ?? state.convictionCheck.chosenPath}`, MARGIN, y)
+    y += LINE_H + 1
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(71, 85, 105)
+
+    if (state.convictionCheck.response === 'yes') {
+      y = wrappedText(doc, y, 'Confirmed with confidence — the matrix ranking matched your gut feeling.', 9)
+    } else if (state.convictionCheck.response === 'unsure') {
+      y = wrappedText(doc, y, 'Expressed some uncertainty. The action plan includes extra checkpoints for reassessment.', 9)
+    } else if (state.convictionCheck.response === 'override') {
+      y = wrappedText(doc, y, `The matrix ranked ${matrixTopPath?.title ?? 'another path'} highest, but you chose ${chosenPath?.title ?? 'a different path'}. The gap between the numbers and your gut reveals hidden priorities that the scores didn't capture.`, 9)
+    }
+
+    if (state.convictionCheck.reasoning) {
+      y += 2
+      y = wrappedText(doc, y, state.convictionCheck.reasoning, 9)
+    }
+
+    // Conviction check conversation if any
+    if (state.convictionCheck.conversation.length > 0) {
+      y += 2
+      for (const msg of state.convictionCheck.conversation) {
+        checkPage(LINE_H * 2)
+        const prefix = msg.role === 'user' ? 'You' : 'Coach'
+        doc.setFont('helvetica', msg.role === 'assistant' ? 'bold' : 'normal')
+        doc.setFontSize(8)
+        y = wrappedText(doc, y, `${prefix}: ${msg.content}`, 8)
+        y += 1
+      }
+    }
+
+    y += SECTION_GAP
+  }
+
+  // ─── 7. Action Plan ───
+  if (state.actionPlan) {
+    checkPage(20)
+    sectionHeading(doc, `Action Plan: ${state.actionPlan.targetPathTitle}`, y)
+    y += 8
+
+    // Biggest Risk (lead with this)
+    if (state.actionPlan.biggestRisk) {
+      checkPage(24)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(180, 83, 9) // amber-700
+      doc.text('Your Biggest Risk Isn\'t What You Think', MARGIN, y)
+      y += LINE_H + 1
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(71, 85, 105)
+      y = wrappedText(doc, y, state.actionPlan.biggestRisk.belief, 9)
+      y += 2
+      doc.setFont('helvetica', 'bold')
+      y = wrappedText(doc, y, `Reframe: ${state.actionPlan.biggestRisk.reframe}`, 9)
+      doc.setFont('helvetica', 'normal')
+      y += 1
+      y = bulletList(doc, y, state.actionPlan.biggestRisk.earlyActions, 8)
+      y += 4
+    }
+
+    // Phases
+    for (const phase of state.actionPlan.phases) {
+      checkPage(20)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(30, 41, 59)
+      doc.text(`${phase.title} (${phase.timeframe})`, MARGIN, y)
+      y += LINE_H + 1
+
+      y = bulletList(doc, y, phase.items)
+      y += 4
+    }
+
+    // Identity Milestones
+    if (state.actionPlan.identityMilestones && state.actionPlan.identityMilestones.length > 0) {
+      checkPage(20)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(109, 40, 217) // violet-700
+      doc.text('Identity Milestones', MARGIN, y)
+      y += LINE_H + 1
+      y = bulletList(
+        doc, y,
+        state.actionPlan.identityMilestones.map((m) => `${m.timeframe}: ${m.milestone}`),
+        9,
+      )
+      y += 4
+    }
+
+    // Decision Checkpoints
+    if (state.actionPlan.checkpoints && state.actionPlan.checkpoints.length > 0) {
+      checkPage(20)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(30, 41, 59)
+      doc.text('Decision Checkpoints', MARGIN, y)
+      y += LINE_H + 1
+
+      for (const cp of state.actionPlan.checkpoints) {
+        checkPage(LINE_H * 5)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(30, 41, 59)
+        y = wrappedText(doc, y, `${cp.timeframe}: ${cp.question}`, 9)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(22, 163, 74) // green-600
+        y = wrappedText(doc, y, `  ✓ Green light: ${cp.greenLight}`, 8)
+        doc.setTextColor(180, 83, 9) // amber-700
+        y = wrappedText(doc, y, `  → Off-ramp: ${cp.offRamp}`, 8)
+        y += 3
+      }
+      y += 2
+    }
+
+    // Supporting sections
+    const sections: [string, string[]][] = [
+      ['Resources', state.actionPlan.resources],
+      ['Resume & Portfolio Tips', state.actionPlan.resumeTips],
+      ['Interview Prep', state.actionPlan.interviewPrep],
+      ['Risk Mitigation', state.actionPlan.riskMitigation],
+    ]
+
+    for (const [title, items] of sections) {
+      if (items.length === 0) continue
+      checkPage(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(71, 85, 105) // slate-600
+      doc.text(title, MARGIN, y)
+      y += LINE_H
+      y = bulletList(doc, y, items, 8)
+      y += 3
+    }
+  }
+
+  doc.save('clarify-career-plan.pdf')
+}
 ```
 
 - [ ] **Step 2: Verify build passes**
@@ -3774,11 +4209,16 @@ After the action plan phases and supporting sections, add:
 Run: `npm run build`
 Expected: Build succeeds.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Run existing PDF tests**
+
+Run: `npx vitest run src/services/__tests__/pdf.test.ts`
+Expected: PASS (tests check for non-zero blob size, which will still work with more content).
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/services/pdf.ts
-git commit -m "feat: update PDF export with narrative, identity milestones, and checkpoints"
+git commit -m "feat: comprehensive PDF export with coaching transcript, tensions, values, scenarios, and conviction check"
 ```
 
 ---
