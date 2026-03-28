@@ -1,19 +1,70 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { WizardState } from '../types'
 import { MATRIX_CRITERIA, PRIORITY_LABELS } from '../types'
 import { ActionPlanDisplay } from './ActionPlanDisplay'
 import { exportPdf } from '../services/pdf'
+import { SkeletonShimmer } from './SkeletonShimmer'
 
 interface SummaryStepProps {
   state: WizardState
   onBack: () => void
+  onSetPersonalNarrative?: (narrative: string) => void
 }
 
-export function SummaryStep({ state, onBack }: SummaryStepProps) {
+export function SummaryStep({ state, onBack, onSetPersonalNarrative }: SummaryStepProps) {
   const [emailInput, setEmailInput] = useState('')
   const [emailSent, setEmailSent] = useState(false)
+  const [narrativeLoading, setNarrativeLoading] = useState(false)
 
   const r = state.reflection
+
+  useEffect(() => {
+    if (
+      state.personalNarrative ||
+      narrativeLoading ||
+      !onSetPersonalNarrative ||
+      !state.insightProfile?.narrative ||
+      !state.actionPlan
+    ) {
+      return
+    }
+
+    const run = async () => {
+      setNarrativeLoading(true)
+      try {
+        const { getApiKey, generatePersonalNarrative } = await import('../services/gemini')
+        const apiKey = getApiKey()
+        if (!apiKey) return
+
+        // Determine chosen path: from conviction check or action plan target
+        const chosenPathId = state.convictionCheck?.chosenPath ?? state.actionPlan!.targetPathId
+        const chosenPath = state.paths.find((p) => p.id === chosenPathId)
+        if (!chosenPath) return
+
+        // Determine matrix top path from conviction check
+        const matrixTopPathId = state.convictionCheck?.matrixTopPath ?? null
+        const matrixTopPath = matrixTopPathId
+          ? (state.paths.find((p) => p.id === matrixTopPathId) ?? null)
+          : null
+
+        const narrative = await generatePersonalNarrative(
+          apiKey,
+          state.insightProfile,
+          state.convictionCheck,
+          chosenPath,
+          matrixTopPath,
+        )
+        onSetPersonalNarrative(narrative)
+      } catch {
+        // silently fail — narrative is a nice-to-have
+      } finally {
+        setNarrativeLoading(false)
+      }
+    }
+
+    void run()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const topPriorities = useMemo(
     () =>
@@ -57,6 +108,23 @@ export function SummaryStep({ state, onBack }: SummaryStepProps) {
           Here's everything from your session in one place.
         </p>
       </div>
+
+      {/* Personal Narrative */}
+      {(state.personalNarrative || narrativeLoading) && (
+        <Section title="Your Story">
+          {narrativeLoading ? (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/30 p-6">
+              <SkeletonShimmer lines={4} />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/30 p-6">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                {state.personalNarrative}
+              </p>
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Reflection Highlights */}
       <Section title="Reflection Highlights">

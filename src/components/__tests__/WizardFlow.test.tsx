@@ -32,6 +32,20 @@ vi.mock('../../services/gemini', () => ({
       values: [{ value: 'Growth', aiRank: 1, userRank: 1, evidence: 'test' }],
     },
   })),
+  streamEnhancedActionPlan: vi.fn((_key: string, _path: unknown, _profile: unknown, _check: unknown, callbacks: { onText: (t: string) => void; onPlan: (p: unknown) => void; onDone: () => void }) => {
+    callbacks.onPlan({
+      targetPathId: 'path-1',
+      targetPathTitle: 'Senior Engineer',
+      phases: [],
+      resources: [],
+      resumeTips: [],
+      interviewPrep: [],
+      riskMitigation: [],
+    })
+    callbacks.onDone()
+    return Promise.resolve()
+  }),
+  generatePersonalNarrative: vi.fn(() => Promise.resolve('Your story begins here.')),
 }))
 
 vi.mock('@google/generative-ai', () => {
