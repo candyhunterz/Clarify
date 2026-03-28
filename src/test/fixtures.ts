@@ -1,5 +1,11 @@
-import type { ReflectionAnswers, CareerPath, MatrixScore, ActionPlan, WizardState } from '../types'
-import { createInitialReflection, createInitialMatrix, createInitialInsightProfile, createInitialValuesHierarchy } from '../types'
+import type {
+  ReflectionAnswers, CareerPath, MatrixScore, ActionPlan, WizardState,
+  InsightProfile, ValuesHierarchy,
+} from '../types'
+import {
+  createInitialReflection, createInitialMatrix,
+  createInitialInsightProfile, createInitialValuesHierarchy,
+} from '../types'
 
 export function createCompletedReflection(): ReflectionAnswers {
   return {
@@ -131,12 +137,48 @@ export function createMockActionPlan(): ActionPlan {
   }
 }
 
+export function createMockInsightProfile(): InsightProfile {
+  return {
+    tensions: [
+      {
+        description: 'Values creative freedom but rates stability highly',
+        question: 'You want creative freedom and stability — which would you sacrifice first?',
+        response: 'I think stability is more about predictability than safety for me.',
+        resolution: 'Reframed stability as predictability — open to risk with clear path.',
+      },
+    ],
+    coreValues: [
+      { value: 'Creative problem-solving', rank: 1, evidence: 'Energized by building UI and solving bugs' },
+      { value: 'Continuous learning', rank: 2, evidence: 'Rated learning opportunity 5/5, learns tech outside work' },
+      { value: 'Autonomy', rank: 3, evidence: 'Flexibility rated 5/5, drained by meetings and unclear requirements' },
+    ],
+    hiddenBlockers: [
+      { belief: 'Too specialized to pivot', source: 'Belief-to-change answer' },
+    ],
+    narrative: "You're someone who thrives on creative technical challenges but feels trapped by legacy code and meetings. Your desire for stability is really about wanting predictability — you'd take a risk if you could see the path clearly.",
+    conversationLog: [
+      { role: 'assistant', content: 'You want creative freedom and stability — which would you sacrifice first?' },
+      { role: 'user', content: 'I think stability is more about predictability than safety for me.' },
+    ],
+  }
+}
+
+export function createMockValuesHierarchy(): ValuesHierarchy {
+  return {
+    values: [
+      { value: 'Creative problem-solving', aiRank: 1, userRank: 1, evidence: 'Energized by building UI' },
+      { value: 'Continuous learning', aiRank: 2, userRank: 2, evidence: 'Learning opportunity 5/5' },
+      { value: 'Autonomy', aiRank: 3, userRank: 3, evidence: 'Flexibility rated 5/5' },
+    ],
+  }
+}
+
 export function createFullWizardState(): WizardState {
   return {
     currentStep: 7,
     reflection: createCompletedReflection(),
-    insightProfile: createInitialInsightProfile(),
-    valuesHierarchy: createInitialValuesHierarchy(),
+    insightProfile: createMockInsightProfile(),
+    valuesHierarchy: createMockValuesHierarchy(),
     paths: createMockPaths(),
     selectedPathIds: ['path-1', 'path-3'],
     pathExplorations: [],
@@ -145,9 +187,15 @@ export function createFullWizardState(): WizardState {
       scores: createMockScores(),
     },
     scenarios: [],
-    convictionCheck: null,
+    convictionCheck: {
+      matrixTopPath: 'path-1',
+      chosenPath: 'path-1',
+      response: 'yes',
+      conversation: [],
+      reasoning: '',
+    },
     actionPlan: createMockActionPlan(),
-    personalNarrative: '',
+    personalNarrative: "You're someone who thrives on creative technical challenges.",
   }
 }
 

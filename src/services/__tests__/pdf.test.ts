@@ -7,6 +7,7 @@ const mockDoc = {
   setTextColor: vi.fn(),
   text: vi.fn(),
   splitTextToSize: vi.fn((text: string) => [text]),
+  getTextWidth: vi.fn(() => 20),
   addPage: vi.fn(),
   save: vi.fn(),
   internal: { pageSize: { getWidth: () => 210, getHeight: () => 297 } },
