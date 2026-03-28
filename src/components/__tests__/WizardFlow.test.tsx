@@ -237,11 +237,19 @@ describe('WizardFlow integration', () => {
     await user.click(screen.getByRole('button', { name: 'Generate action plan' }))
 
     // ────────────────────────────────────────────
-    // Step 5: Commit (placeholder)
+    // Step 5: Commit (conviction check)
     // ────────────────────────────────────────────
 
     await waitFor(() => {
       expect(screen.getByText('Does this feel right?')).toBeInTheDocument()
+    })
+
+    // Select "Yes, that's the one" to set conviction check and unlock Continue
+    await user.click(screen.getByText("Yes, that's the one"))
+
+    // Wait for post-commit confirmation state, then click Generate plan
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Generate plan' })).not.toBeDisabled()
     })
     await user.click(screen.getByRole('button', { name: 'Generate plan' }))
 

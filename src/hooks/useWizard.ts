@@ -359,8 +359,7 @@ export function useWizard() {
         )
       }
       case 5:
-        // Placeholder: always allow advancing until CommitStep is fully implemented
-        return true
+        return state.convictionCheck !== null
       case 6:
         return state.actionPlan !== null
       default:
