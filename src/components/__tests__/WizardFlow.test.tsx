@@ -33,15 +33,7 @@ vi.mock('../../services/gemini', () => ({
     },
   })),
   streamEnhancedActionPlan: vi.fn((_key: string, _path: unknown, _profile: unknown, _check: unknown, callbacks: { onText: (t: string) => void; onPlan: (p: unknown) => void; onDone: () => void }) => {
-    callbacks.onPlan({
-      targetPathId: 'path-1',
-      targetPathTitle: 'Senior Engineer',
-      phases: [],
-      resources: [],
-      resumeTips: [],
-      interviewPrep: [],
-      riskMitigation: [],
-    })
+    callbacks.onPlan(createMockActionPlan())
     callbacks.onDone()
     return Promise.resolve()
   }),
